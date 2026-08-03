@@ -1,0 +1,34 @@
+<div class="ace-draft-upgrader-settings">
+    <div class="inline-drawer">
+        <div class="inline-drawer-toggle inline-drawer-header">
+            <b>⊹ ACE DRAFT UPGRADER ⊹</b>
+            <div class="inline-drawer-icon fa-solid fa-circle-chevron-down up"></div>
+        </div>
+        <div class="inline-drawer-content" style="display: none;">
+            <div class="adu-settings-card">
+                <p class="adu-settings-intro" data-adu-i18n="settingsIntro">Defaults used by the quick dialog in the magic-wand menu.</p>
+                <section>
+                    <h4 class="adu-settings-heading" data-adu-i18n="settingsBehavior">Defaults</h4>
+                    <label class="adu-settings-block adu-settings-toggle" for="adu_quick_toggle">
+                        <span class="adu-settings-text">
+                            <span class="adu-settings-label" data-adu-i18n="settingsQuickButton">Quick upgrade button</span>
+                            <span class="adu-settings-desc" data-adu-i18n="settingsQuickButtonDesc">Shows an UP button beside Send that upgrades the draft in one click using these defaults.</span>
+                        </span>
+                        <input id="adu_quick_toggle" type="checkbox" />
+                    </label>
+                    <label class="adu-settings-block" for="adu_default_instruction">
+                        <span class="adu-settings-text">
+                            <span class="adu-settings-label" data-adu-i18n="settingsInstruction">Default instruction</span>
+                            <span class="adu-settings-desc" data-adu-i18n="settingsInstructionDesc">Applied after the selected preset and context.</span>
+                        </span>
+                        <textarea id="adu_default_instruction" class="text_pole" rows="5"></textarea>
+                    </label>
+                    <button id="adu_reset_instruction" type="button" class="menu_button adu-settings-reset">
+                        <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
+                        <span data-adu-i18n="settingsReset">Reset instruction</span>
+                    </button>
+                </section>
+            </div>
+        </div>
+    </div>
+</div>

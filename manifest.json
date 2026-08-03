@@ -1,0 +1,12 @@
+{
+    "display_name": "⊹ ACE DRAFT UPGRADER ⊹",
+    "loading_order": 25,
+    "requires": [],
+    "optional": [],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "aceenvw",
+    "version": "1.0.0",
+    "license": "AGPL-3.0-or-later",
+    "auto_update": true
+}

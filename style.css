@@ -1,0 +1,627 @@
+/* ⊹ ACE DRAFT UPGRADER ⊹ */
+
+:root {
+    --adu-surface: color-mix(in srgb, var(--SmartThemeBlurTintColor, rgba(18, 18, 20, 0.96)) 88%, rgba(255, 255, 255, 0.03) 12%);
+    --adu-surface-strong: color-mix(in srgb, var(--SmartThemeBlurTintColor, rgba(18, 18, 20, 0.98)) 80%, rgba(255, 255, 255, 0.08) 20%);
+    --adu-border: color-mix(in srgb, var(--SmartThemeBorderColor, rgba(255, 255, 255, 0.16)) 80%, rgba(255, 255, 255, 0.12) 20%);
+    --adu-accent: var(--SmartThemeQuoteColor, #6aa9ff);
+    --adu-accent-soft: color-mix(in srgb, var(--SmartThemeQuoteColor, #6aa9ff) 14%, transparent);
+    --adu-text: var(--SmartThemeBodyColor, #f2f0eb);
+    --adu-muted: color-mix(in srgb, var(--SmartThemeBodyColor, #f2f0eb) 64%, var(--SmartThemeEmColor, #9b9b9b) 36%);
+}
+
+#adu_wand_button[data-build] {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+}
+
+#adu_wand_button[data-build] .extensionsMenuExtensionButton {
+    flex: 0 0 auto;
+}
+
+#rightSendForm > button.adu-quick {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 var(--bottomFormBlockSize);
+    order: 1;
+    width: var(--bottomFormBlockSize);
+    height: var(--bottomFormBlockSize);
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 7px;
+    color: var(--adu-text);
+    appearance: none;
+    -webkit-appearance: none;
+    background: transparent !important;
+    box-shadow: none !important;
+    outline: none !important;
+    font: inherit;
+    opacity: 0.52;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+#rightSendForm > button.adu-quick .adu-quick__label {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 30px;
+    padding: 2px 5px;
+    border: 1px solid color-mix(in srgb, var(--adu-accent) 45%, var(--adu-border) 55%);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--adu-accent) 9%, transparent);
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: 0.08em;
+    transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
+}
+
+#rightSendForm > button.adu-quick:hover,
+#rightSendForm > button.adu-quick:focus-visible {
+    color: var(--adu-accent);
+    opacity: 0.9;
+}
+
+#rightSendForm > button.adu-quick:hover .adu-quick__label,
+#rightSendForm > button.adu-quick:focus-visible .adu-quick__label {
+    border-color: color-mix(in srgb, var(--adu-accent) 68%, var(--adu-border) 32%);
+    background: color-mix(in srgb, var(--adu-accent) 14%, transparent);
+}
+
+#rightSendForm > button.adu-quick:focus-visible .adu-quick__label {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--adu-accent) 28%, transparent);
+}
+
+#rightSendForm > button.adu-quick:active .adu-quick__label {
+    transform: scale(0.92);
+}
+
+#rightSendForm > button.adu-quick.adu-quick--busy {
+    color: var(--adu-accent);
+    opacity: 0.92;
+}
+
+#rightSendForm > button.adu-quick.adu-quick--busy .adu-quick__label {
+    border-color: var(--adu-accent);
+    background: color-mix(in srgb, var(--adu-accent) 18%, transparent);
+    animation: adu-pulse 1.1s ease-in-out infinite;
+}
+
+.adu-quick--hidden {
+    display: none !important;
+}
+
+.adu-dialog {
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+    width: 100%;
+    max-width: 660px;
+    margin-inline: auto;
+    color: var(--adu-text);
+    text-align: left;
+}
+
+.adu-dialog,
+.adu-dialog * {
+    box-sizing: border-box;
+    white-space: normal;
+}
+
+.adu-title {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+}
+
+.adu-title h3 {
+    margin: 0;
+    font-size: 1.04em;
+    letter-spacing: 0.2px;
+}
+
+.adu-title__glyph {
+    color: var(--adu-accent);
+    font-size: 0.72em;
+    opacity: 0.75;
+}
+
+.adu-intro,
+.adu-hint,
+.adu-empty {
+    margin: 0;
+    color: var(--adu-muted);
+    font-size: 0.8em;
+    line-height: 1.45;
+}
+
+.adu-card {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    padding: 12px;
+    border: 1px solid var(--adu-border);
+    border-radius: 12px;
+    background:
+        linear-gradient(180deg, var(--adu-accent-soft) 0%, transparent 24%),
+        var(--adu-surface);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.adu-card:focus-within {
+    border-color: color-mix(in srgb, var(--adu-accent) 44%, var(--adu-border));
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.27);
+}
+
+.adu-card__heading {
+    color: var(--adu-muted);
+    font-size: 0.72em;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+}
+
+.adu-length-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+}
+
+.adu-length {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 48px;
+    padding: 6px 8px;
+    border: 1px solid var(--adu-border);
+    border-radius: 999px;
+    color: var(--adu-text);
+    background: var(--adu-surface-strong);
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.84em;
+    transition: border-color 0.15s ease, background 0.15s ease, transform 0.12s ease;
+}
+
+.adu-length small {
+    color: var(--adu-muted);
+    font-size: 0.72em;
+}
+
+.adu-length:hover,
+.adu-length:focus-visible {
+    border-color: color-mix(in srgb, var(--adu-accent) 55%, var(--adu-border));
+}
+
+.adu-length[aria-pressed="true"] {
+    border-color: var(--adu-accent);
+    background: color-mix(in srgb, var(--adu-accent) 16%, var(--adu-surface-strong));
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--adu-accent) 18%, transparent);
+}
+
+.adu-length:active {
+    transform: scale(0.96);
+}
+
+.adu-custom-length {
+    display: grid;
+    grid-template-columns: minmax(130px, 1fr) minmax(90px, 150px);
+    align-items: center;
+    gap: 10px;
+    color: var(--adu-muted);
+    font-size: 0.82em;
+}
+
+.adu-custom-length[hidden] {
+    display: none;
+}
+
+.adu-context-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+}
+
+.adu-history-depth {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--adu-border);
+    transition: opacity 0.15s ease;
+}
+
+.adu-history-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
+}
+
+.adu-history-depth__label {
+    color: var(--adu-muted);
+    font-size: 0.82em;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.adu-history-depth--off {
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+.adu-model-select {
+    width: 100%;
+    min-height: 36px;
+}
+
+.adu-model-select:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.adu-toggle {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid var(--adu-border);
+    border-radius: 9px;
+    background: var(--adu-surface-strong);
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.adu-toggle:hover {
+    border-color: color-mix(in srgb, var(--adu-accent) 40%, var(--adu-border));
+}
+
+.adu-toggle:has(input:checked) {
+    border-color: color-mix(in srgb, var(--adu-accent) 54%, var(--adu-border));
+    background: color-mix(in srgb, var(--adu-accent) 11%, var(--adu-surface-strong));
+}
+
+.adu-toggle input[type="checkbox"] {
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+    accent-color: var(--adu-accent);
+}
+
+.adu-toggle__label {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--adu-text);
+    font-size: 0.84em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.adu-preset-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.adu-preset-name {
+    max-width: 62%;
+    overflow: hidden;
+    color: var(--adu-accent);
+    font-size: 0.92em;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-overflow: ellipsis;
+    text-transform: none;
+    white-space: nowrap;
+}
+
+.adu-preset-toolbar {
+    display: flex;
+    gap: 6px;
+    margin: 8px 0 6px;
+}
+
+.adu-preset-details {
+    border: 1px solid var(--adu-border);
+    border-radius: 9px;
+    background: var(--adu-surface-strong);
+    overflow: hidden;
+}
+
+.adu-preset-summary {
+    padding: 9px 10px;
+    color: var(--adu-muted);
+    cursor: pointer;
+    font-size: 0.8em;
+    font-weight: 600;
+    transition: color 0.15s ease, background 0.15s ease;
+}
+
+.adu-preset-summary:hover,
+.adu-preset-summary:focus-visible {
+    color: var(--adu-accent);
+    background: var(--adu-accent-soft);
+}
+
+.adu-preset-details[open] .adu-preset-summary {
+    border-bottom: 1px solid var(--adu-border);
+}
+
+.adu-preset-details > .adu-preset-toolbar,
+.adu-preset-details > .adu-prompt-list {
+    margin-inline: 8px;
+}
+
+.adu-preset-details > .adu-prompt-list {
+    margin-bottom: 8px;
+}
+
+.adu-preset-toolbar .menu_button {
+    min-height: 32px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.76em;
+}
+
+.adu-prompt-list {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    max-height: min(31vh, 260px);
+    overflow-y: auto;
+    padding-right: 2px;
+    scrollbar-width: thin;
+}
+
+.adu-prompt-row {
+    min-height: 38px;
+    padding-block: 7px;
+}
+
+.adu-prompt-row--disabled {
+    opacity: 0.72;
+}
+
+.adu-role,
+.adu-source-state {
+    flex: 0 0 auto;
+    padding: 2px 6px;
+    border-radius: 999px;
+    color: var(--adu-muted);
+    background: color-mix(in srgb, var(--adu-accent) 8%, transparent);
+    font-size: 0.66em;
+    text-transform: uppercase;
+}
+
+.adu-source-state {
+    margin-left: auto;
+    text-transform: none;
+}
+
+.adu-instruction {
+    width: 100%;
+    min-height: 94px;
+    max-height: 230px;
+    padding: 10px 11px;
+    border-radius: 9px;
+    font-size: 0.84em;
+    line-height: 1.48;
+    resize: vertical;
+    white-space: pre-wrap !important;
+}
+
+.adu-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 34px;
+    padding: 7px 10px;
+    border: 1px dashed var(--adu-border);
+    border-radius: 9px;
+    color: var(--adu-muted);
+    font-size: 0.82em;
+}
+
+.adu-status[hidden] {
+    display: none;
+}
+
+.adu-dialog--busy .adu-status::before {
+    content: '✦';
+    margin-right: 7px;
+    color: var(--adu-accent);
+    animation: adu-pulse 1.1s ease-in-out infinite;
+}
+
+.adu-dialog--busy .adu-card {
+    pointer-events: none;
+    opacity: 0.62;
+}
+
+.adu-actions {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+}
+
+.adu-actions .menu_button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-width: 150px;
+    min-height: 44px;
+    padding-inline: 18px;
+    border-radius: 999px;
+}
+
+.adu-upgrade {
+    border-color: color-mix(in srgb, var(--adu-accent) 45%, var(--adu-border)) !important;
+    background: linear-gradient(180deg,
+        color-mix(in srgb, var(--adu-accent) 20%, transparent),
+        color-mix(in srgb, var(--adu-accent) 9%, transparent)) !important;
+}
+
+.adu-stop {
+    color: #e0645f;
+    border-color: color-mix(in srgb, #e0645f 40%, var(--adu-border)) !important;
+}
+
+.popup:has(.adu-dialog) .popup-controls {
+    justify-content: center;
+}
+
+.popup:has(.adu-dialog) .popup-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+@keyframes adu-pulse {
+    0%, 100% { opacity: 0.35; transform: scale(0.9); }
+    50% { opacity: 1; transform: scale(1.08); }
+}
+
+/* Settings drawer */
+.ace-draft-upgrader-settings .adu-settings-card {
+    margin-top: 6px;
+    padding: 14px;
+    border: 1px solid var(--adu-border);
+    border-radius: 14px;
+    color: var(--adu-text);
+    background:
+        linear-gradient(180deg, var(--adu-accent-soft) 0%, transparent 22%),
+        var(--adu-surface);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+}
+
+.adu-settings-intro {
+    margin: 0 0 12px;
+    color: var(--adu-muted);
+    font-size: 0.84em;
+    line-height: 1.5;
+}
+
+.adu-settings-heading {
+    margin: 0 0 8px;
+    color: var(--adu-muted);
+    font-size: 0.72em;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.adu-settings-block {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 12px;
+    border: 1px solid var(--adu-border);
+    border-radius: 10px;
+    background: var(--adu-surface-strong);
+}
+
+.adu-settings-toggle {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+    cursor: pointer;
+}
+
+.adu-settings-toggle input[type="checkbox"] {
+    flex: 0 0 auto;
+    width: 17px;
+    height: 17px;
+    accent-color: var(--adu-accent);
+}
+
+.adu-settings-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.adu-settings-label {
+    font-size: 0.9em;
+}
+
+.adu-settings-desc {
+    color: var(--adu-muted);
+    font-size: 0.76em;
+    line-height: 1.4;
+}
+
+.adu-settings-block textarea {
+    width: 100%;
+    min-height: 110px;
+    resize: vertical;
+    white-space: pre-wrap !important;
+}
+
+.ace-draft-upgrader-settings .adu-settings-reset {
+    display: flex;
+    gap: 7px;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-width: 0;
+    min-height: 40px;
+    margin: 10px auto 0;
+    padding: 0 18px;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+    .adu-dialog { gap: 9px; }
+    .adu-card { padding: 10px; }
+    .adu-length-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .adu-history-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+    .adu-history-grid > .adu-length { grid-column: span 2; }
+    .adu-history-grid > .adu-length:nth-last-child(2) { grid-column: 2 / span 2; }
+    .adu-history-grid > .adu-length:last-child { grid-column: 4 / span 2; }
+    .adu-context-grid { grid-template-columns: 1fr; }
+    .adu-preset-head { align-items: flex-start; flex-direction: column; }
+    .adu-preset-name { max-width: 100%; }
+    .adu-custom-length { grid-template-columns: 1fr; }
+    .adu-prompt-list { max-height: 27vh; }
+    .adu-actions { align-items: stretch; flex-direction: column; }
+    .adu-actions .menu_button { width: 100%; min-width: 0; }
+}
+
+@media (pointer: coarse) {
+    #rightSendForm:has(> button.adu-quick:not(.adu-quick--hidden)) {
+        width: 44px;
+        min-width: 44px;
+    }
+
+    #rightSendForm > button.adu-quick {
+        flex-basis: 44px;
+        width: 44px;
+        height: 44px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .adu-card,
+    .adu-length,
+    .adu-toggle {
+        transition: none !important;
+    }
+    .adu-dialog--busy .adu-status::before,
+    #rightSendForm > button.adu-quick.adu-quick--busy .adu-quick__label {
+        animation: none !important;
+    }
+}
