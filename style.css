@@ -22,6 +22,7 @@
 }
 
 #rightSendForm > button.adu-quick {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -60,6 +61,20 @@
     line-height: 1.2;
     letter-spacing: 0.08em;
     transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
+}
+
+#rightSendForm > button.adu-quick .adu-quick__count {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    color: var(--adu-muted);
+    font-size: var(--adu-count-size, 8px);
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0.02em;
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
 }
 
 #rightSendForm > button.adu-quick:hover,
@@ -513,8 +528,14 @@
     line-height: 1.5;
 }
 
+.ace-draft-upgrader-settings .adu-settings-card section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
 .adu-settings-heading {
-    margin: 0 0 8px;
+    margin: 0;
     color: var(--adu-muted);
     font-size: 0.72em;
     letter-spacing: 0.06em;
@@ -536,7 +557,6 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    margin-bottom: 8px;
     cursor: pointer;
 }
 
@@ -578,7 +598,7 @@
     width: 100%;
     min-width: 0;
     min-height: 40px;
-    margin: 10px auto 0;
+    margin: 2px auto 0;
     padding: 0 18px;
     border-radius: 999px;
     white-space: nowrap;

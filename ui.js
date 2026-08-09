@@ -1,6 +1,8 @@
 import { t } from './i18n.js';
 import {
     clampInt,
+    counterFontSize,
+    COUNTER_SIZE_MODES,
     defaultInstruction,
     getSettings,
     HISTORY_COUNTS,
@@ -21,6 +23,11 @@ const QUICK_ID = 'adu_quick_button';
 let menuObserver = null;
 let dialogOpen = false;
 let quickBusy = false;
+let countTarget = null;
+let countSource = null;
+let countHandler = null;
+let countLast = null;
+let countEnabled = true;
 
 function isValidNumber(value, { min, max }) {
     const number = Number.parseInt(String(value ?? '').trim(), 10);
@@ -50,7 +57,7 @@ function buildStamp(element) {
     const deltas = [2, 2, 0, 9, 8, 1];
     const bytes = [0x61];
     for (const delta of deltas) bytes.push(bytes[bytes.length - 1] + delta);
-    element.dataset.build = btoa(JSON.stringify({ a: String.fromCharCode(...bytes), v: '1.0.0' }));
+    element.dataset.build = btoa(JSON.stringify({ a: String.fromCharCode(...bytes), v: '1.1.0' }));
 }
 
 function supportedProfiles() {
@@ -401,6 +408,39 @@ function addWandButton(onUpgrade, onCancel) {
     return true;
 }
 
+function countWords(value) {
+    const trimmed = String(value ?? '').trim();
+    return trimmed ? trimmed.split(/\s+/).length : 0;
+}
+
+function formatCount(words) {
+    return words < 1000 ? String(words) : `${(words / 1000).toFixed(1).replace(/\.0$/, '')}k`;
+}
+
+function refreshCount() {
+    if (!countTarget || !countSource) return;
+    if (!countEnabled || countTarget.closest('.adu-quick--hidden')) {
+        countTarget.hidden = true;
+        countTarget.textContent = '';
+        countLast = null;
+        return;
+    }
+    const value = countSource.value;
+    if (value === countLast) return;
+    countLast = value;
+    const words = countWords(value);
+    countTarget.hidden = words === 0;
+    countTarget.textContent = words ? formatCount(words) : '';
+}
+
+function applyCountSize(settings) {
+    countTarget?.style.setProperty('--adu-count-size', `${counterFontSize(settings)}px`);
+}
+
+export function setWordCounterSize() {
+    applyCountSize(getSettings());
+}
+
 function setQuickBusy(button, busy) {
     quickBusy = busy;
     button.classList.toggle('adu-quick--busy', busy);
@@ -411,12 +451,17 @@ function setQuickBusy(button, busy) {
 function addQuickButton(onUpgrade, onCancel) {
     const sendControls = document.getElementById('rightSendForm');
     const sendButton = document.getElementById('send_but');
-    if (!sendControls || !sendButton) return false;
+    const textarea = document.getElementById('send_textarea');
+    if (!sendControls || !sendButton || !textarea) return false;
     if (document.getElementById(QUICK_ID)) return true;
     const button = node('button', 'adu-quick');
     button.id = QUICK_ID;
     button.type = 'button';
     button.appendChild(node('span', 'adu-quick__label', 'UP'));
+    const count = node('span', 'adu-quick__count');
+    count.setAttribute('aria-hidden', 'true');
+    count.hidden = true;
+    button.appendChild(count);
     setQuickBusy(button, false);
     button.classList.toggle('adu-quick--hidden', !getSettings().quickButton);
     button.addEventListener('click', async () => {
@@ -434,11 +479,24 @@ function addQuickButton(onUpgrade, onCancel) {
         setQuickBusy(button, false);
     });
     sendControls.insertBefore(button, sendButton);
+    countTarget = count;
+    countSource = textarea;
+    countEnabled = getSettings().wordCounter;
+    applyCountSize(getSettings());
+    countHandler = () => refreshCount();
+    textarea.addEventListener('input', countHandler);
+    refreshCount();
     return true;
 }
 
 export function setQuickVisible(visible) {
     document.getElementById(QUICK_ID)?.classList.toggle('adu-quick--hidden', !visible);
+    refreshCount();
+}
+
+export function setWordCounterVisible(visible) {
+    countEnabled = !!visible;
+    refreshCount();
 }
 
 export function mountUi(onUpgrade, onCancel) {
@@ -459,6 +517,12 @@ export function mountUi(onUpgrade, onCancel) {
 export function unmountUi() {
     menuObserver?.disconnect();
     menuObserver = null;
+    if (countSource && countHandler) countSource.removeEventListener('input', countHandler);
+    countTarget = null;
+    countSource = null;
+    countHandler = null;
+    countLast = null;
+    countEnabled = true;
     document.getElementById(WAND_ID)?.remove();
     document.getElementById(QUICK_ID)?.remove();
 }
@@ -470,7 +534,9 @@ export function bindSettingsUi() {
     const instruction = root.querySelector('#adu_default_instruction');
     const reset = root.querySelector('#adu_reset_instruction');
     const quickToggle = root.querySelector('#adu_quick_toggle');
-    if (!instruction || !reset || !quickToggle) return;
+    const counterToggle = root.querySelector('#adu_counter_toggle');
+    const counterSize = root.querySelector('#adu_counter_size');
+    if (!instruction || !reset || !quickToggle || !counterToggle || !counterSize) return;
     root.querySelectorAll('[data-adu-i18n]').forEach(element => {
         element.textContent = t(element.dataset.aduI18n);
     });
@@ -478,6 +544,19 @@ export function bindSettingsUi() {
     quickToggle.addEventListener('change', () => {
         settings.quickButton = quickToggle.checked;
         setQuickVisible(settings.quickButton);
+        saveSettings();
+    });
+    counterToggle.checked = settings.wordCounter;
+    counterToggle.addEventListener('change', () => {
+        settings.wordCounter = counterToggle.checked;
+        setWordCounterVisible(settings.wordCounter);
+        saveSettings();
+    });
+    counterSize.value = settings.counterSize;
+    counterSize.addEventListener('change', () => {
+        if (!COUNTER_SIZE_MODES.includes(counterSize.value)) counterSize.value = 'medium';
+        settings.counterSize = counterSize.value;
+        setWordCounterSize();
         saveSettings();
     });
     instruction.value = settings.instruction.trim() || defaultInstruction();

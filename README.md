@@ -4,7 +4,7 @@
 > Rewrites the text already in your composer — with persona, card, lorebook and chat history as context — **without sending it.**
 
 ![SillyTavern](https://img.shields.io/badge/SillyTavern-Extension-9333ea)
-![Version](https://img.shields.io/badge/version-1.0.0-3b82f6)
+![Version](https://img.shields.io/badge/version-1.1.0-3b82f6)
 ![Author](https://img.shields.io/badge/author-aceenvw-1f2937)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-10b981)
 
@@ -20,6 +20,7 @@
 - **Separate upgrade model** — route the rewrite through any saved connection profile.
 - **Per-preset prompt selection** — include or exclude individual preset prompts, remembered per preset.
 - **Quick UP button** — optional one-click upgrade beside Send; click again to stop.
+- **Draft word counter** — live word count above the UP button, in three sizes.
 - **Bilingual** — English and Russian.
 
 ---
@@ -82,6 +83,8 @@ Under **Extensions** → **⊹ ACE DRAFT UPGRADER ⊹**:
 | Setting | Default | Description |
 | --- | --- | --- |
 | **Quick upgrade button** | on | Show the **UP** button beside Send |
+| **Draft word counter** | on | Show the composer word count above the **UP** button |
+| **Counter size** | Medium | Word count text size — Small (7px), Medium (8px), Large (10px) |
 | **Default instruction** | *(built-in)* | Rewrite instruction appended after preset and context |
 
 Model, length, context, history depth and prompt selection live in the dialog itself.
@@ -108,8 +111,9 @@ prompt would overflow the context window.
 
 ## Security
 
-- Dialog built from `createElement` / `textContent`; the one `insertAdjacentHTML`
-  call inserts the extension's own bundled template, never user data.
+- Dialog built from `createElement` / `textContent`; the one `innerHTML`
+  call parses the extension's own bundled template, never user data.
+- Word counter renders through `textContent` only — draft text is never parsed as markup.
 - Numeric fields accept a plain in-range integer only — `50<script>`, `1e3`,
   `0x10` and `12.5` are rejected rather than coerced.
 - Instruction capped at 10,000 chars, profile IDs at 200, control characters stripped.

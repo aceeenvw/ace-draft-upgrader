@@ -4,6 +4,8 @@ export const LENGTH_MODES = Object.freeze([...Object.keys(LENGTH_WORDS), 'custom
 export const HISTORY_COUNTS = Object.freeze({ last5: 5, last15: 15, last30: 30 });
 export const HISTORY_MODES = Object.freeze(['all', ...Object.keys(HISTORY_COUNTS), 'custom']);
 export const WORD_LIMITS = Object.freeze({ min: 1, max: 5000 });
+export const COUNTER_SIZES = Object.freeze({ small: 7, medium: 8, large: 10 });
+export const COUNTER_SIZE_MODES = Object.freeze(Object.keys(COUNTER_SIZES));
 export const HISTORY_LIMITS = Object.freeze({ min: 1, max: 500 });
 const INSTRUCTION_MAX = 10000;
 const PROFILE_ID_MAX = 200;
@@ -19,6 +21,8 @@ const DEFAULTS = Object.freeze({
     lorebook: true,
     history: true,
     quickButton: true,
+    wordCounter: true,
+    counterSize: 'medium',
     profileId: '',
     instruction: DEFAULT_INSTRUCTION,
     promptSelections: {},
@@ -81,6 +85,8 @@ export function getSettings() {
         lorebook: typeof raw.lorebook === 'boolean' ? raw.lorebook : DEFAULTS.lorebook,
         history: typeof raw.history === 'boolean' ? raw.history : DEFAULTS.history,
         quickButton: typeof raw.quickButton === 'boolean' ? raw.quickButton : DEFAULTS.quickButton,
+        wordCounter: typeof raw.wordCounter === 'boolean' ? raw.wordCounter : DEFAULTS.wordCounter,
+        counterSize: COUNTER_SIZE_MODES.includes(raw.counterSize) ? raw.counterSize : DEFAULTS.counterSize,
         profileId: normalizeProfileId(raw.profileId),
         instruction: normalizeInstruction(raw.instruction),
         promptSelections: sanitizeSelections(raw.promptSelections),
@@ -91,6 +97,10 @@ export function getSettings() {
 
 export function saveSettings() {
     SillyTavern.getContext().saveSettingsDebounced();
+}
+
+export function counterFontSize(settings) {
+    return COUNTER_SIZES[settings.counterSize] || COUNTER_SIZES.medium;
 }
 
 export function defaultInstruction() {
