@@ -519,6 +519,7 @@
         linear-gradient(180deg, var(--adu-accent-soft) 0%, transparent 22%),
         var(--adu-surface);
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+    container: adu-settings / inline-size;
 }
 
 .adu-settings-intro {
@@ -560,6 +561,14 @@
     cursor: pointer;
 }
 
+.ace-draft-upgrader-settings .adu-settings-choice {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 124px;
+    align-items: center;
+    gap: 12px;
+    text-align: left;
+}
+
 .adu-settings-toggle input[type="checkbox"] {
     flex: 0 0 auto;
     width: 17px;
@@ -569,23 +578,41 @@
 
 .adu-settings-text {
     display: flex;
+    flex: 1 1 auto;
     flex-direction: column;
     gap: 2px;
+    min-width: 0;
 }
 
 .adu-settings-label {
     font-size: 0.9em;
+    font-weight: 600;
+    line-height: 1.35;
 }
 
 .adu-settings-desc {
     color: var(--adu-muted);
     font-size: 0.76em;
     line-height: 1.4;
+    text-wrap: pretty;
 }
 
-.adu-settings-block textarea {
+.ace-draft-upgrader-settings .adu-settings-control {
+    width: 124px;
+    min-height: 36px;
+    margin: 0;
+}
+
+.ace-draft-upgrader-settings .adu-settings-instruction {
+    display: grid;
+    gap: 6px;
+    text-align: left;
+}
+
+.ace-draft-upgrader-settings .adu-settings-instruction textarea {
     width: 100%;
     min-height: 110px;
+    margin: 0;
     resize: vertical;
     white-space: pre-wrap !important;
 }
@@ -602,6 +629,17 @@
     padding: 0 18px;
     border-radius: 999px;
     white-space: nowrap;
+}
+
+@container adu-settings (max-width: 360px) {
+    .ace-draft-upgrader-settings .adu-settings-choice {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 8px;
+    }
+
+    .ace-draft-upgrader-settings .adu-settings-control {
+        width: 100%;
+    }
 }
 
 @media (max-width: 600px) {

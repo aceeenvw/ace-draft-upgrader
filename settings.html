@@ -23,24 +23,24 @@
                         </span>
                         <input id="adu_counter_toggle" type="checkbox" />
                     </label>
-                    <label class="adu-settings-block" for="adu_counter_size">
-                        <span class="adu-settings-text">
+                    <div class="adu-settings-block adu-settings-choice">
+                        <label class="adu-settings-text" for="adu_counter_size">
                             <span class="adu-settings-label" data-adu-i18n="settingsCounterSize">Counter size</span>
                             <span class="adu-settings-desc" data-adu-i18n="settingsCounterSizeDesc">Text size of the word count.</span>
-                        </span>
-                        <select id="adu_counter_size" class="text_pole">
+                        </label>
+                        <select id="adu_counter_size" class="text_pole adu-settings-control">
                             <option value="small" data-adu-i18n="sizeSmall">Small</option>
                             <option value="medium" data-adu-i18n="sizeMedium">Medium</option>
                             <option value="large" data-adu-i18n="sizeLarge">Large</option>
                         </select>
-                    </label>
-                    <label class="adu-settings-block" for="adu_default_instruction">
-                        <span class="adu-settings-text">
+                    </div>
+                    <div class="adu-settings-block adu-settings-instruction">
+                        <label class="adu-settings-text" for="adu_default_instruction">
                             <span class="adu-settings-label" data-adu-i18n="settingsInstruction">Default instruction</span>
                             <span class="adu-settings-desc" data-adu-i18n="settingsInstructionDesc">Applied after the selected preset and context.</span>
-                        </span>
+                        </label>
                         <textarea id="adu_default_instruction" class="text_pole" rows="5"></textarea>
-                    </label>
+                    </div>
                     <button id="adu_reset_instruction" type="button" class="menu_button adu-settings-reset">
                         <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
                         <span data-adu-i18n="settingsReset">Reset instruction</span>
