@@ -1,4 +1,5 @@
 import { is_send_press } from '/script.js';
+import { playMessageSound } from '/scripts/power-user.js';
 import { t } from './i18n.js';
 import { buildUpgradeRequest } from './prompt.js';
 import { resolveProfileId } from './settings.js';
@@ -8,11 +9,18 @@ const EXT_PATH = new URL('.', import.meta.url).pathname.replace(/\/$/, '');
 const TAG = 'ADU';
 const ANCHOR_SELECTOR = '.ace-entry-track-settings';
 const ANCHOR_TIMEOUT_MS = 15000;
+const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const IS_DESKTOP_OS = !IS_IOS && !/Android|webOS|BlackBerry|Opera Mini|IEMobile/i.test(navigator.userAgent);
 let inFlight = false;
 let activeAbort = null;
 let activeUsesProfile = false;
 
 const warn = (scope, error) => console.warn(`[${TAG}] ${scope}`, error);
+
+function playCompletionSound() {
+    if (IS_DESKTOP_OS) playMessageSound();
+}
 
 function setComposerValue(textarea, value) {
     textarea.value = value;
@@ -98,6 +106,7 @@ async function upgradeDraft(settings) {
             : await generateViaMainApi(ctx, request)).trim();
         if (!upgraded) throw new Error('Empty generation result');
         setComposerValue(textarea, upgraded);
+        playCompletionSound();
         window.setTimeout(() => textarea.focus(), 0);
         showUndo(original, upgraded);
         return true;

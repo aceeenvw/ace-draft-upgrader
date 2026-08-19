@@ -57,7 +57,7 @@ function buildStamp(element) {
     const deltas = [2, 2, 0, 9, 8, 1];
     const bytes = [0x61];
     for (const delta of deltas) bytes.push(bytes[bytes.length - 1] + delta);
-    element.dataset.build = btoa(JSON.stringify({ a: String.fromCharCode(...bytes), v: '1.1.0' }));
+    element.dataset.build = btoa(JSON.stringify({ a: String.fromCharCode(...bytes), v: '1.2.0' }));
 }
 
 function supportedProfiles() {

@@ -4,7 +4,7 @@
 > Rewrites the text already in your composer — with persona, card, lorebook and chat history as context — **without sending it.**
 
 ![SillyTavern](https://img.shields.io/badge/SillyTavern-Extension-9333ea)
-![Version](https://img.shields.io/badge/version-1.1.0-3b82f6)
+![Version](https://img.shields.io/badge/version-1.2.0-3b82f6)
 ![Author](https://img.shields.io/badge/author-aceenvw-1f2937)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-10b981)
 
@@ -21,6 +21,7 @@
 - **Per-preset prompt selection** — include or exclude individual preset prompts, remembered per preset.
 - **Quick UP button** — optional one-click upgrade beside Send; click again to stop.
 - **Draft word counter** — live word count above the UP button, in three sizes.
+- **Completion sound** — on desktop, reuses SillyTavern's message sound when an upgrade lands. SillyTavern's **Play message sound** and **Only when unfocused** preferences remain authoritative; mobile stays silent.
 - **Bilingual** — English and Russian.
 
 ---
