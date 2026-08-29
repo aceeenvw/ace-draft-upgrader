@@ -15,11 +15,12 @@
 - **In-place rewriting** — no message sent, no swipe consumed.
 - **One-click Undo** — a nine-second toast restores the original draft.
 - **Target length** — ~50, 200, 500, or a custom count up to 5000 words.
-- **Context toggles** — persona, card description, lorebook, chat history.
+- **Context toggles** — persona, character card, lorebook, chat history.
 - **History depth** — read all messages or just the last 5 / 15 / 30 / *n*.
 - **Separate upgrade model** — route the rewrite through any saved connection profile.
 - **Per-preset prompt selection** — include or exclude individual preset prompts, remembered per preset.
 - **Quick UP button** — optional one-click upgrade beside Send; click again to stop.
+- **Keyboard shortcut** — assign a desktop shortcut for upgrading from the composer.
 - **Draft word counter** — live word count above the UP button, in three sizes.
 - **Completion sound** — on desktop, reuses SillyTavern's message sound when an upgrade lands. SillyTavern's **Play message sound** and **Only when unfocused** preferences remain authoritative; mobile stays silent.
 - **Bilingual** — English and Russian.
@@ -42,6 +43,9 @@ additionally needs the built-in Connection Profiles extension and one saved prof
 
 Type a draft, then either open **Upgrade Draft** from the magic-wand menu, or
 click **UP** beside Send to run with your saved defaults.
+
+On desktop, you can also assign a keyboard shortcut in the extension settings.
+It works while the composer is focused and uses the same saved defaults.
 
 Dialog changes are saved, so the UP button always mirrors your last setup.
 
@@ -86,6 +90,7 @@ Under **Extensions** → **⊹ ACE DRAFT UPGRADER ⊹**:
 | **Quick upgrade button** | on | Show the **UP** button beside Send |
 | **Draft word counter** | on | Show the composer word count above the **UP** button |
 | **Counter size** | Medium | Word count text size — Small (7px), Medium (8px), Large (10px) |
+| **Keyboard shortcut** | Not set | Desktop shortcut for upgrading the current draft |
 | **Default instruction** | *(built-in)* | Rewrite instruction appended after preset and context |
 
 Model, length, context, history depth and prompt selection live in the dialog itself.

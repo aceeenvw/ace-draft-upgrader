@@ -34,12 +34,24 @@
                             <option value="large" data-adu-i18n="sizeLarge">Large</option>
                         </select>
                     </div>
+                    <div id="adu_hotkey_row" class="adu-settings-block adu-settings-choice">
+                        <label class="adu-settings-text" for="adu_hotkey_input">
+                            <span class="adu-settings-label" data-adu-i18n="settingsHotkey">Keyboard shortcut</span>
+                            <span id="adu_hotkey_desc" class="adu-settings-desc" data-adu-i18n="settingsHotkeyDesc">Select the field, then press a shortcut with Ctrl, Alt, or Meta.</span>
+                        </label>
+                        <div class="adu-hotkey-control">
+                            <input id="adu_hotkey_input" class="text_pole" type="text" readonly aria-describedby="adu_hotkey_desc" />
+                            <button id="adu_hotkey_clear" type="button" class="menu_button" aria-label="Clear shortcut">
+                                <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                    </div>
                     <div class="adu-settings-block adu-settings-instruction">
                         <label class="adu-settings-text" for="adu_default_instruction">
                             <span class="adu-settings-label" data-adu-i18n="settingsInstruction">Default instruction</span>
                             <span class="adu-settings-desc" data-adu-i18n="settingsInstructionDesc">Applied after the selected preset and context.</span>
                         </label>
-                        <textarea id="adu_default_instruction" class="text_pole" rows="5"></textarea>
+                        <textarea id="adu_default_instruction" class="text_pole" rows="5" maxlength="10000"></textarea>
                     </div>
                     <button id="adu_reset_instruction" type="button" class="menu_button adu-settings-reset">
                         <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>

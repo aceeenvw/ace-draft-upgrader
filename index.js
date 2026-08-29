@@ -14,7 +14,7 @@ const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
 const IS_DESKTOP_OS = !IS_IOS && !/Android|webOS|BlackBerry|Opera Mini|IEMobile/i.test(navigator.userAgent);
 let inFlight = false;
 let activeAbort = null;
-let activeUsesProfile = false;
+let activeMainGeneration = false;
 
 const warn = (scope, error) => console.warn(`[${TAG}] ${scope}`, error);
 
@@ -39,30 +39,44 @@ function isCancellation(error) {
 function cancelUpgrade() {
     if (!inFlight) return false;
     activeAbort?.abort(new DOMException('Cancelled by user', 'AbortError'));
-    if (!activeUsesProfile) SillyTavern.getContext().stopGeneration?.();
+    if (activeMainGeneration) SillyTavern.getContext().stopGeneration?.();
     return true;
 }
 
 function showUndo(original, upgraded) {
-    toastr.success(t('replaced'), t('undo'), {
+    const restore = () => {
+        const textarea = document.getElementById('send_textarea');
+        if (!textarea || textarea.value !== upgraded) return;
+        setComposerValue(textarea, original);
+        textarea.focus();
+        toastr.info(t('restored'), t('title'));
+    };
+    const toast = toastr.success(t('replaced'), t('undo'), {
         timeOut: 9000,
         extendedTimeOut: 3000,
-        onclick: () => {
-            const textarea = document.getElementById('send_textarea');
-            if (!textarea || textarea.value !== upgraded) return;
-            setComposerValue(textarea, original);
-            textarea.focus();
-            toastr.info(t('restored'), t('title'));
-        },
+        onclick: restore,
+    });
+    toast?.attr?.({ role: 'button', tabindex: 0, 'aria-label': t('undo') });
+    toast?.on?.('keydown', event => {
+        if (!['Enter', ' '].includes(event.key)) return;
+        event.preventDefault();
+        restore();
     });
 }
 
-async function generateViaMainApi(ctx, request) {
-    return String(await ctx.generateRaw({
-        prompt: request.prompt,
-        responseLength: request.responseLength,
-        trimNames: false,
-    }) || '');
+async function generateViaMainApi(ctx, request, signal) {
+    activeMainGeneration = true;
+    try {
+        const result = await ctx.generateRaw({
+            prompt: request.prompt,
+            responseLength: request.responseLength,
+            trimNames: false,
+        });
+        signal.throwIfAborted();
+        return String(result || '');
+    } finally {
+        activeMainGeneration = false;
+    }
 }
 
 async function generateViaProfile(ctx, profileId, request, signal) {
@@ -98,16 +112,21 @@ async function upgradeDraft(settings) {
 
     inFlight = true;
     activeAbort = new AbortController();
-    activeUsesProfile = !!profileId;
     try {
-        const request = await buildUpgradeRequest(original, settings);
+        const request = await buildUpgradeRequest(original, settings, activeAbort.signal);
+        activeAbort.signal.throwIfAborted();
         const upgraded = (profileId
             ? await generateViaProfile(ctx, profileId, request, activeAbort.signal)
-            : await generateViaMainApi(ctx, request)).trim();
+            : await generateViaMainApi(ctx, request, activeAbort.signal)).trim();
         if (!upgraded) throw new Error('Empty generation result');
-        setComposerValue(textarea, upgraded);
+        const currentTextarea = document.getElementById('send_textarea');
+        if (currentTextarea !== textarea || currentTextarea.value !== original) {
+            toastr.warning(t('draftChanged'), t('title'));
+            return false;
+        }
+        setComposerValue(currentTextarea, upgraded);
         playCompletionSound();
-        window.setTimeout(() => textarea.focus(), 0);
+        window.setTimeout(() => currentTextarea.focus(), 0);
         showUndo(original, upgraded);
         return true;
     } catch (error) {
@@ -121,7 +140,6 @@ async function upgradeDraft(settings) {
     } finally {
         inFlight = false;
         activeAbort = null;
-        activeUsesProfile = false;
     }
 }
 

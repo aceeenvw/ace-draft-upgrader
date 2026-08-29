@@ -4,10 +4,10 @@ export const LENGTH_MODES = Object.freeze([...Object.keys(LENGTH_WORDS), 'custom
 export const HISTORY_COUNTS = Object.freeze({ last5: 5, last15: 15, last30: 30 });
 export const HISTORY_MODES = Object.freeze(['all', ...Object.keys(HISTORY_COUNTS), 'custom']);
 export const WORD_LIMITS = Object.freeze({ min: 1, max: 5000 });
-export const COUNTER_SIZES = Object.freeze({ small: 7, medium: 8, large: 10 });
+const COUNTER_SIZES = Object.freeze({ small: 7, medium: 8, large: 10 });
 export const COUNTER_SIZE_MODES = Object.freeze(Object.keys(COUNTER_SIZES));
 export const HISTORY_LIMITS = Object.freeze({ min: 1, max: 500 });
-const INSTRUCTION_MAX = 10000;
+export const INSTRUCTION_MAX = 10000;
 const PROFILE_ID_MAX = 200;
 const DEFAULT_INSTRUCTION = 'Rewrite and improve the draft below. Preserve its intent, point of view, factual details, and roleplay continuity. Make the prose natural and polished. Return only the upgraded draft, with no commentary or quotation marks.';
 
@@ -23,6 +23,7 @@ const DEFAULTS = Object.freeze({
     quickButton: true,
     wordCounter: true,
     counterSize: 'medium',
+    hotkey: null,
     profileId: '',
     instruction: DEFAULT_INSTRUCTION,
     promptSelections: {},
@@ -48,11 +49,10 @@ function sanitizeSelections(value) {
     return output;
 }
 
-function normalizeInstruction(value) {
-    if (typeof value !== 'string' || !value.trim()) {
-        return DEFAULT_INSTRUCTION;
-    }
-    return stripControlCharacters(value).slice(0, INSTRUCTION_MAX);
+export function normalizeInstruction(value) {
+    if (typeof value !== 'string') return DEFAULT_INSTRUCTION;
+    const clean = stripControlCharacters(value).trim().slice(0, INSTRUCTION_MAX);
+    return clean || DEFAULT_INSTRUCTION;
 }
 
 function stripControlCharacters(value) {
@@ -68,6 +68,18 @@ export function clampInt(value, { min, max }, fallback) {
 function normalizeProfileId(value) {
     if (typeof value !== 'string') return '';
     return stripControlCharacters(value).trim().slice(0, PROFILE_ID_MAX);
+}
+
+function normalizeHotkey(value) {
+    const raw = plainObject(value);
+    const code = stripControlCharacters(raw.code || '').slice(0, 32);
+    const key = stripControlCharacters(raw.key || '').slice(0, 32);
+    const ctrl = raw.ctrl === true;
+    const shift = raw.shift === true;
+    const alt = raw.alt === true;
+    const meta = raw.meta === true;
+    if ((!code && !key) || (!ctrl && !alt && !meta)) return DEFAULTS.hotkey;
+    return { code, key, ctrl, shift, alt, meta };
 }
 
 export function getSettings() {
@@ -87,6 +99,7 @@ export function getSettings() {
         quickButton: typeof raw.quickButton === 'boolean' ? raw.quickButton : DEFAULTS.quickButton,
         wordCounter: typeof raw.wordCounter === 'boolean' ? raw.wordCounter : DEFAULTS.wordCounter,
         counterSize: COUNTER_SIZE_MODES.includes(raw.counterSize) ? raw.counterSize : DEFAULTS.counterSize,
+        hotkey: normalizeHotkey(raw.hotkey),
         profileId: normalizeProfileId(raw.profileId),
         instruction: normalizeInstruction(raw.instruction),
         promptSelections: sanitizeSelections(raw.promptSelections),

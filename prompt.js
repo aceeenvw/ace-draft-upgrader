@@ -76,16 +76,15 @@ function substitute(content, outlets = {}) {
     return ctx.substituteParams?.(withOutlets) ?? withOutlets;
 }
 
-async function lorebookContext(ctx, draft, settings, history, contextTokens) {
+async function lorebookContext(ctx, draft, settings, history, contextTokens, fields) {
     if (!settings.lorebook || typeof ctx.getWorldInfoPrompt !== 'function') return null;
-    const fields = ctx.getCharacterCardFields?.() || {};
     const scan = [draft, ...(settings.history ? history.slice().reverse().map(message => message.content) : [])];
     return ctx.getWorldInfoPrompt(scan, contextTokens, true, {
         personaDescription: settings.persona ? fields.persona || '' : '',
         characterDescription: settings.card ? fields.description || '' : '',
-        characterPersonality: '',
+        characterPersonality: settings.card ? fields.personality || '' : '',
         characterDepthPrompt: '',
-        scenario: '',
+        scenario: settings.card ? fields.scenario || '' : '',
         creatorNotes: '',
         trigger: 'quiet',
     });
@@ -125,7 +124,8 @@ function cleanMessages(messages) {
         }));
 }
 
-export async function buildUpgradeRequest(draft, settings) {
+export async function buildUpgradeRequest(draft, settings, signal) {
+    signal?.throwIfAborted();
     const ctx = SillyTavern.getContext();
     const contextLimit = ctx.chatCompletionSettings?.openai_max_context || 8192;
     const fields = ctx.getCharacterCardFields?.() || {};
@@ -133,7 +133,8 @@ export async function buildUpgradeRequest(draft, settings) {
     const entries = presetEntries();
     const prompts = new Map(entries.map(entry => [entry.identifier, entry]));
     const history = historyMessages(ctx, historyLimit(settings));
-    const lore = await lorebookContext(ctx, draft, settings, history, contextLimit);
+    const lore = await lorebookContext(ctx, draft, settings, history, contextLimit, fields);
+    signal?.throwIfAborted();
     const messages = [];
     const inserted = new Set();
 
@@ -144,6 +145,10 @@ export async function buildUpgradeRequest(draft, settings) {
             messages.push({ role: 'system', content: fields.persona });
         } else if (identifier === 'charDescription' && settings.card && fields.description) {
             messages.push({ role: 'system', content: fields.description });
+        } else if (identifier === 'charPersonality' && settings.card && fields.personality) {
+            messages.push({ role: 'system', content: fields.personality });
+        } else if (identifier === 'scenario' && settings.card && fields.scenario) {
+            messages.push({ role: 'system', content: fields.scenario });
         } else if (identifier === 'worldInfoBefore' && lore?.worldInfoBefore) {
             messages.push({ role: 'system', content: lore.worldInfoBefore });
         } else if (identifier === 'worldInfoAfter' && lore?.worldInfoAfter) {
@@ -171,7 +176,7 @@ export async function buildUpgradeRequest(draft, settings) {
         if (content.trim()) messages.push({ role: prompt.role, content });
     }
 
-    for (const marker of ['worldInfoBefore', 'personaDescription', 'charDescription', 'worldInfoAfter', 'dialogueExamples', 'chatHistory']) {
+    for (const marker of ['worldInfoBefore', 'personaDescription', 'charDescription', 'charPersonality', 'scenario', 'worldInfoAfter', 'dialogueExamples', 'chatHistory']) {
         insertMarker(marker);
     }
 

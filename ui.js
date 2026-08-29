@@ -8,8 +8,10 @@ import {
     HISTORY_COUNTS,
     HISTORY_LIMITS,
     HISTORY_MODES,
+    INSTRUCTION_MAX,
     LENGTH_MODES,
     LENGTH_WORDS,
+    normalizeInstruction,
     resolveProfileId,
     saveSettings,
     selectedPrompt,
@@ -55,7 +57,8 @@ function hotkeyLabel(hotkey) {
 
 function isEditableTarget(event) {
     const path = typeof event.composedPath === 'function' ? event.composedPath() : [event.target];
-    return path.some(element => element?.matches?.('input, textarea, select, [contenteditable]:not([contenteditable="false"])'));
+    const editable = path.find(element => element?.matches?.('input, textarea, select, [contenteditable]:not([contenteditable="false"])'));
+    return !!editable && editable.id !== 'send_textarea';
 }
 
 function isMobileClient() {
@@ -71,9 +74,10 @@ function bindGlobalHotkey() {
         const button = document.getElementById(QUICK_ID);
         if (!button) return;
         event.preventDefault();
+        event.stopImmediatePropagation();
         button.click();
     };
-    document.addEventListener('keydown', hotkeyHandler);
+    document.addEventListener('keydown', hotkeyHandler, true);
 }
 
 function isValidNumber(value, { min, max }) {
@@ -118,11 +122,12 @@ function supportedProfiles() {
 }
 
 function createModelSection(settings) {
-    const section = node('section', 'adu-card adu-model-card');
-    section.appendChild(node('div', 'adu-card__heading', t('model')));
-
+    const section = node('section', 'adu-card');
     const select = node('select', 'text_pole adu-model-select');
     select.id = 'adu_model_select';
+    const heading = node('label', 'adu-card__heading', t('model'));
+    heading.htmlFor = select.id;
+    section.appendChild(heading);
     select.appendChild(new Option(t('modelUseCurrent'), ''));
 
     const profiles = supportedProfiles();
@@ -163,6 +168,15 @@ function setBusyState(root, busy) {
         status.hidden = !busy;
         status.textContent = t('upgrading');
     }
+    root.querySelectorAll('.adu-card button, .adu-card input, .adu-card select, .adu-card textarea').forEach(control => {
+        if (busy) {
+            control.dataset.aduBusyDisabled = String(control.disabled);
+            control.disabled = true;
+        } else if (Object.hasOwn(control.dataset, 'aduBusyDisabled')) {
+            control.disabled = control.dataset.aduBusyDisabled === 'true';
+            delete control.dataset.aduBusyDisabled;
+        }
+    });
 }
 
 function createLengthSection(settings) {
@@ -320,7 +334,7 @@ function persistDialog(settings, model, length, context, preset) {
     saveSettings();
 }
 
-export async function openUpgradeDialog(onUpgrade, onCancel) {
+async function openUpgradeDialog(onUpgrade, onCancel) {
     if (dialogOpen) return;
     const ctx = SillyTavern.getContext();
     if (!resolveProfileId(getSettings()) && ctx.mainApi !== 'openai' && !supportedProfiles().length) {
@@ -351,10 +365,14 @@ export async function openUpgradeDialog(onUpgrade, onCancel) {
     root.append(model.section, length.section, context.section, preset.section);
 
     const instructionCard = node('section', 'adu-card');
-    instructionCard.appendChild(node('div', 'adu-card__heading', t('instruction')));
     const instruction = node('textarea', 'text_pole adu-instruction');
+    instruction.id = 'adu_instruction';
     instruction.rows = 4;
+    instruction.maxLength = INSTRUCTION_MAX;
     instruction.value = settings.instruction;
+    const instructionLabel = node('label', 'adu-card__heading', t('instruction'));
+    instructionLabel.htmlFor = instruction.id;
+    instructionCard.appendChild(instructionLabel);
     instructionCard.append(instruction, node('p', 'adu-hint', t('instructionHint')));
     root.appendChild(instructionCard);
 
@@ -403,18 +421,15 @@ export async function openUpgradeDialog(onUpgrade, onCancel) {
             context.history.customInput.focus();
             return;
         }
-        settings.instruction = instruction.value.trim() || defaultInstruction();
+        settings.instruction = normalizeInstruction(instruction.value);
         persistDialog(settings, model, length, context, preset);
         setBusyState(root, true);
         stop.disabled = false;
         let completed = false;
         try {
             completed = await onUpgrade(settings);
-        } catch {
-            completed = false;
-        } finally {
-            setBusyState(root, false);
-        }
+        } catch {}
+        setBusyState(root, false);
         if (completed) popup.complete(ctx.POPUP_RESULT.AFFIRMATIVE);
     });
 
@@ -484,7 +499,7 @@ function applyCountSize(settings) {
     countTarget?.style.setProperty('--adu-count-size', `${counterFontSize(settings)}px`);
 }
 
-export function setWordCounterSize() {
+function setWordCounterSize() {
     applyCountSize(getSettings());
 }
 
@@ -536,12 +551,12 @@ function addQuickButton(onUpgrade, onCancel) {
     return true;
 }
 
-export function setQuickVisible(visible) {
+function setQuickVisible(visible) {
     document.getElementById(QUICK_ID)?.classList.toggle('adu-quick--hidden', !visible);
     refreshCount();
 }
 
-export function setWordCounterVisible(visible) {
+function setWordCounterVisible(visible) {
     countEnabled = !!visible;
     refreshCount();
 }
@@ -565,7 +580,7 @@ export function mountUi(onUpgrade, onCancel) {
 export function unmountUi() {
     menuObserver?.disconnect();
     menuObserver = null;
-    if (hotkeyHandler) document.removeEventListener('keydown', hotkeyHandler);
+    if (hotkeyHandler) document.removeEventListener('keydown', hotkeyHandler, true);
     hotkeyHandler = null;
     settingsAbort?.abort();
     settingsAbort = null;
@@ -627,7 +642,7 @@ export function bindSettingsUi() {
             return;
         }
         if (['Control', 'Shift', 'Alt', 'Meta', 'AltGraph'].includes(event.key)) return;
-        if (!event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey) {
+        if (!event.ctrlKey && !event.altKey && !event.metaKey) {
             hotkeyInput.value = t('settingsHotkeyModifier');
             hotkeyDesc.textContent = t('settingsHotkeyModifier');
             return;
@@ -670,7 +685,7 @@ export function bindSettingsUi() {
     }, listenerOptions);
     instruction.value = settings.instruction.trim() || defaultInstruction();
     instruction.addEventListener('change', () => {
-        settings.instruction = instruction.value.trim() || defaultInstruction();
+        settings.instruction = normalizeInstruction(instruction.value);
         instruction.value = settings.instruction;
         saveSettings();
         toastr.success(t('settingsSaved'), t('title'));

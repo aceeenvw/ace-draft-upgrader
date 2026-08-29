@@ -603,6 +603,35 @@
     margin: 0;
 }
 
+.adu-hotkey-control {
+    display: flex;
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
+}
+
+.ace-draft-upgrader-settings #adu_hotkey_input {
+    min-width: 0;
+    height: 36px;
+    margin: 0;
+    cursor: pointer;
+    text-align: center;
+}
+
+.ace-draft-upgrader-settings #adu_hotkey_input.adu-hotkey--recording {
+    border-color: var(--adu-accent);
+    box-shadow: 0 0 0 2px var(--adu-accent-soft);
+}
+
+.ace-draft-upgrader-settings #adu_hotkey_clear {
+    flex: 0 0 36px;
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    margin: 0;
+    padding: 0;
+}
+
 .ace-draft-upgrader-settings .adu-settings-instruction {
     display: grid;
     gap: 6px;
@@ -638,6 +667,10 @@
     }
 
     .ace-draft-upgrader-settings .adu-settings-control {
+        width: 100%;
+    }
+
+    .adu-hotkey-control {
         width: 100%;
     }
 }
