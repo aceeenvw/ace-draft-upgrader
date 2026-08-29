@@ -28,6 +28,53 @@ let countSource = null;
 let countHandler = null;
 let countLast = null;
 let countEnabled = true;
+let hotkeyHandler = null;
+let settingsAbort = null;
+
+function hotkeyMatches(event, hotkey) {
+    if (!hotkey) return false;
+    if (!!event.ctrlKey !== hotkey.ctrl || !!event.shiftKey !== hotkey.shift) return false;
+    if (!!event.altKey !== hotkey.alt || !!event.metaKey !== hotkey.meta) return false;
+    if (/^(Key[A-Z]|Digit[0-9])$/.test(hotkey.code)) return event.code === hotkey.code;
+    return String(event.key).toLowerCase() === String(hotkey.key).toLowerCase();
+}
+
+function hotkeyLabel(hotkey) {
+    if (!hotkey) return t('settingsHotkeyNone');
+    const parts = [];
+    if (hotkey.ctrl) parts.push('Ctrl');
+    if (hotkey.shift) parts.push('Shift');
+    if (hotkey.alt) parts.push('Alt');
+    if (hotkey.meta) parts.push(/Mac|iPhone|iPad/.test(navigator.platform) ? 'Cmd' : 'Meta');
+    const names = { ' ': 'Space', Escape: 'Esc', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→' };
+    const physicalKey = hotkey.code?.match(/^Key([A-Z])$/)?.[1] || hotkey.code?.match(/^Digit([0-9])$/)?.[1];
+    const key = physicalKey || names[hotkey.key] || (hotkey.key?.length === 1 ? hotkey.key.toUpperCase() : hotkey.key);
+    parts.push(key || hotkey.code);
+    return parts.join(' + ');
+}
+
+function isEditableTarget(event) {
+    const path = typeof event.composedPath === 'function' ? event.composedPath() : [event.target];
+    return path.some(element => element?.matches?.('input, textarea, select, [contenteditable]:not([contenteditable="false"])'));
+}
+
+function isMobileClient() {
+    return !!SillyTavern.getContext().isMobile?.();
+}
+
+function bindGlobalHotkey() {
+    if (hotkeyHandler) return;
+    hotkeyHandler = event => {
+        if (event.defaultPrevented || event.repeat || event.isComposing || event.getModifierState?.('AltGraph')
+            || isMobileClient() || isEditableTarget(event)) return;
+        if (!hotkeyMatches(event, getSettings().hotkey)) return;
+        const button = document.getElementById(QUICK_ID);
+        if (!button) return;
+        event.preventDefault();
+        button.click();
+    };
+    document.addEventListener('keydown', hotkeyHandler);
+}
 
 function isValidNumber(value, { min, max }) {
     const number = Number.parseInt(String(value ?? '').trim(), 10);
@@ -389,8 +436,8 @@ function addWandButton(onUpgrade, onCancel) {
     button.setAttribute('role', 'button');
     button.title = t('menuTitle');
     buildStamp(button);
-    const icon = node('div', 'fa-solid fa-wand-magic-sparkles extensionsMenuExtensionButton');
-    button.append(icon, node('span', '', t('title')));
+    const icon = node('div', 'fa-solid fa-file-pen extensionsMenuExtensionButton');
+    button.append(icon, node('span', '', 'DRAFT UPGRADER'));
     const activate = event => {
         if (event.type === 'keydown') {
             if (!['Enter', ' '].includes(event.key)) return;
@@ -500,6 +547,7 @@ export function setWordCounterVisible(visible) {
 }
 
 export function mountUi(onUpgrade, onCancel) {
+    bindGlobalHotkey();
     const mountAll = () => {
         const wandReady = addWandButton(onUpgrade, onCancel);
         const quickReady = addQuickButton(onUpgrade, onCancel);
@@ -517,6 +565,10 @@ export function mountUi(onUpgrade, onCancel) {
 export function unmountUi() {
     menuObserver?.disconnect();
     menuObserver = null;
+    if (hotkeyHandler) document.removeEventListener('keydown', hotkeyHandler);
+    hotkeyHandler = null;
+    settingsAbort?.abort();
+    settingsAbort = null;
     if (countSource && countHandler) countSource.removeEventListener('input', countHandler);
     countTarget = null;
     countSource = null;
@@ -525,6 +577,7 @@ export function unmountUi() {
     countEnabled = true;
     document.getElementById(WAND_ID)?.remove();
     document.getElementById(QUICK_ID)?.remove();
+    document.querySelector('.ace-draft-upgrader-settings')?.remove();
 }
 
 export function bindSettingsUi() {
@@ -536,39 +589,95 @@ export function bindSettingsUi() {
     const quickToggle = root.querySelector('#adu_quick_toggle');
     const counterToggle = root.querySelector('#adu_counter_toggle');
     const counterSize = root.querySelector('#adu_counter_size');
-    if (!instruction || !reset || !quickToggle || !counterToggle || !counterSize) return;
+    const hotkeyRow = root.querySelector('#adu_hotkey_row');
+    const hotkeyInput = root.querySelector('#adu_hotkey_input');
+    const hotkeyDesc = root.querySelector('#adu_hotkey_desc');
+    const hotkeyClear = root.querySelector('#adu_hotkey_clear');
+    if (!instruction || !reset || !quickToggle || !counterToggle || !counterSize
+        || !hotkeyRow || !hotkeyInput || !hotkeyDesc || !hotkeyClear) return;
+    settingsAbort?.abort();
+    settingsAbort = new AbortController();
+    const listenerOptions = { signal: settingsAbort.signal };
     root.querySelectorAll('[data-adu-i18n]').forEach(element => {
         element.textContent = t(element.dataset.aduI18n);
     });
+    hotkeyRow.hidden = isMobileClient();
+    hotkeyInput.value = hotkeyLabel(settings.hotkey);
+    hotkeyInput.setAttribute('aria-label', t('settingsHotkeyRecord'));
+    hotkeyClear.title = t('settingsHotkeyClear');
+    hotkeyClear.setAttribute('aria-label', t('settingsHotkeyClear'));
+
+    hotkeyInput.addEventListener('focus', () => {
+        hotkeyDesc.textContent = t('settingsHotkeyDesc');
+        hotkeyInput.value = t('settingsHotkeyPress');
+        hotkeyInput.classList.add('adu-hotkey--recording');
+    }, listenerOptions);
+    hotkeyInput.addEventListener('blur', () => {
+        hotkeyDesc.textContent = t('settingsHotkeyDesc');
+        hotkeyInput.value = hotkeyLabel(settings.hotkey);
+        hotkeyInput.classList.remove('adu-hotkey--recording');
+    }, listenerOptions);
+    hotkeyInput.addEventListener('keydown', event => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (event.repeat || event.isComposing) return;
+        if (event.getModifierState?.('AltGraph')) return;
+        if (event.key === 'Escape') {
+            hotkeyInput.blur();
+            return;
+        }
+        if (['Control', 'Shift', 'Alt', 'Meta', 'AltGraph'].includes(event.key)) return;
+        if (!event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey) {
+            hotkeyInput.value = t('settingsHotkeyModifier');
+            hotkeyDesc.textContent = t('settingsHotkeyModifier');
+            return;
+        }
+        settings.hotkey = {
+            code: String(event.code || '').slice(0, 32),
+            key: String(event.key || '').slice(0, 32),
+            ctrl: !!event.ctrlKey,
+            shift: !!event.shiftKey,
+            alt: !!event.altKey,
+            meta: !!event.metaKey,
+        };
+        saveSettings();
+        hotkeyInput.blur();
+    }, listenerOptions);
+    hotkeyClear.addEventListener('click', () => {
+        settings.hotkey = null;
+        saveSettings();
+        hotkeyInput.value = hotkeyLabel(settings.hotkey);
+    }, listenerOptions);
+
     quickToggle.checked = settings.quickButton;
     quickToggle.addEventListener('change', () => {
         settings.quickButton = quickToggle.checked;
         setQuickVisible(settings.quickButton);
         saveSettings();
-    });
+    }, listenerOptions);
     counterToggle.checked = settings.wordCounter;
     counterToggle.addEventListener('change', () => {
         settings.wordCounter = counterToggle.checked;
         setWordCounterVisible(settings.wordCounter);
         saveSettings();
-    });
+    }, listenerOptions);
     counterSize.value = settings.counterSize;
     counterSize.addEventListener('change', () => {
         if (!COUNTER_SIZE_MODES.includes(counterSize.value)) counterSize.value = 'medium';
         settings.counterSize = counterSize.value;
         setWordCounterSize();
         saveSettings();
-    });
+    }, listenerOptions);
     instruction.value = settings.instruction.trim() || defaultInstruction();
     instruction.addEventListener('change', () => {
         settings.instruction = instruction.value.trim() || defaultInstruction();
         instruction.value = settings.instruction;
         saveSettings();
         toastr.success(t('settingsSaved'), t('title'));
-    });
+    }, listenerOptions);
     reset.addEventListener('click', () => {
         settings.instruction = defaultInstruction();
         instruction.value = settings.instruction;
         saveSettings();
-    });
+    }, listenerOptions);
 }
