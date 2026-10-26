@@ -1,5 +1,7 @@
 import { promptManager } from '/scripts/openai.js';
-import { historyLimit, selectedPrompt, targetWords } from './settings.js';
+import { historyLimit, resolveProfileId, selectedPrompt, targetWords, tokenBudget, TOKEN_LIMITS } from './settings.js';
+import { RequestBudgetError, resolveRequestContext } from './request.js';
+import { t } from './i18n.js';
 
 const MARKERS = new Set([
     'worldInfoBefore',
@@ -104,15 +106,19 @@ function addDepthLore(messages, depthEntries) {
     }
 }
 
-function trimHistory(messages, outputWords, contextTokens) {
-    const maxCharacters = Math.max(4000, (contextTokens - Math.ceil(outputWords * 1.8) - 256) * 3.2);
-    let total = messages.reduce((sum, message) => sum + String(message.content || '').length, 0);
-    while (total > maxCharacters) {
-        const index = messages.findIndex(message => message._history);
-        if (index < 0) break;
-        total -= String(messages[index].content || '').length;
-        messages.splice(index, 1);
+function trimHistory(messages, inputTokens) {
+    // Estimate framing and text without tokenizing or caching the chat.
+    const size = message => Math.ceil(String(message.content || '').trim().length / 3.2) + 8;
+    let total = messages.reduce((sum, message) => sum + size(message), 0);
+    const kept = messages.filter(message => {
+        if (total <= inputTokens || !message._history) return true;
+        total -= size(message);
+        return false;
+    });
+    if (total > inputTokens) {
+        throw new RequestBudgetError(t('promptTooLarge'));
     }
+    return kept;
 }
 
 function cleanMessages(messages) {
@@ -124,16 +130,22 @@ function cleanMessages(messages) {
         }));
 }
 
-export async function buildUpgradeRequest(draft, settings, signal) {
+export async function buildUpgradeRequest(draft, settings, signal, route = resolveRequestContext(resolveProfileId(settings))) {
     signal?.throwIfAborted();
     const ctx = SillyTavern.getContext();
-    const contextLimit = ctx.chatCompletionSettings?.openai_max_context || 8192;
+    const { contextLimit } = route;
+    const responseLength = tokenBudget(settings, contextLimit);
+    if (responseLength === null) throw new RequestBudgetError(t('invalidTokens', TOKEN_LIMITS));
+    const inputTokens = contextLimit - responseLength - 256;
+    if (inputTokens <= 0) {
+        throw new RequestBudgetError(t('budgetTooLarge', { tokens: responseLength, context: contextLimit }));
+    }
     const fields = ctx.getCharacterCardFields?.() || {};
     const presetName = activePresetName();
     const entries = presetEntries();
     const prompts = new Map(entries.map(entry => [entry.identifier, entry]));
-    const history = historyMessages(ctx, historyLimit(settings));
-    const lore = await lorebookContext(ctx, draft, settings, history, contextLimit, fields);
+    const history = settings.history ? historyMessages(ctx, historyLimit(settings)) : [];
+    const lore = await lorebookContext(ctx, draft, settings, history, inputTokens, fields);
     signal?.throwIfAborted();
     const messages = [];
     const inserted = new Set();
@@ -181,7 +193,7 @@ export async function buildUpgradeRequest(draft, settings, signal) {
     }
 
     const words = targetWords(settings);
-    const instruction = settings.instruction.trim();
+    const instruction = substitute(settings.instruction, lore?.outletEntries).trim();
     messages.push({
         role: 'system',
         content: `${instruction}\n\nAim for approximately ${words} words. This instruction overrides any earlier response-length guidance. Do not mention these instructions.`,
@@ -191,10 +203,8 @@ export async function buildUpgradeRequest(draft, settings, signal) {
         content: `<DRAFT>\n${draft.trim()}\n</DRAFT>`,
     });
 
-    trimHistory(messages, words, contextLimit);
-    const requestedOutput = Math.max(128, Math.ceil(words * 1.8) + 64);
     return {
-        prompt: cleanMessages(messages),
-        responseLength: Math.min(16384, Math.max(128, Math.min(Math.floor(contextLimit / 2), requestedOutput))),
+        prompt: cleanMessages(trimHistory(messages, inputTokens)),
+        responseLength,
     };
 }

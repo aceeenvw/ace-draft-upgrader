@@ -12,19 +12,27 @@ import {
     LENGTH_MODES,
     LENGTH_WORDS,
     normalizeInstruction,
+    parseCustomTokens,
     resolveProfileId,
     saveSettings,
     selectedPrompt,
     setPromptSelection,
+    tokenBudget,
+    TOKEN_LIMITS,
     WORD_LIMITS,
 } from './settings.js';
 import { activePresetName, presetEntries } from './prompt.js';
+import { resolveRequestContext } from './request.js';
+import { mountComposerActions } from './composer-actions.js';
 
 const WAND_ID = 'adu_wand_button';
 const QUICK_ID = 'adu_quick_button';
 let menuObserver = null;
+let menuTimer = 0;
 let dialogOpen = false;
-let quickBusy = false;
+let dialogCleanup = null;
+let quickCleanup = null;
+let composerCleanup = null;
 let countTarget = null;
 let countSource = null;
 let countHandler = null;
@@ -32,6 +40,8 @@ let countLast = null;
 let countEnabled = true;
 let hotkeyHandler = null;
 let settingsAbort = null;
+let recoveryActions = null;
+let resultClose = null;
 
 function hotkeyMatches(event, hotkey) {
     if (!hotkey) return false;
@@ -157,20 +167,25 @@ function closeWandMenu() {
     if (menu) menu.style.display = 'none';
 }
 
-function setBusyState(root, busy) {
+function setBusyState(root, busy, stopping = false) {
     root.classList.toggle('adu-dialog--busy', busy);
     const action = root.querySelector('.adu-upgrade');
     const stop = root.querySelector('.adu-stop');
     const status = root.querySelector('.adu-status');
     if (action) action.disabled = busy;
-    if (stop) stop.hidden = !busy;
+    if (stop) {
+        stop.hidden = !busy;
+        stop.disabled = stopping;
+    }
     if (status) {
         status.hidden = !busy;
-        status.textContent = t('upgrading');
+        status.textContent = t(stopping ? 'stopping' : 'upgrading');
     }
     root.querySelectorAll('.adu-card button, .adu-card input, .adu-card select, .adu-card textarea').forEach(control => {
         if (busy) {
-            control.dataset.aduBusyDisabled = String(control.disabled);
+            if (!Object.hasOwn(control.dataset, 'aduBusyDisabled')) {
+                control.dataset.aduBusyDisabled = String(control.disabled);
+            }
             control.disabled = true;
         } else if (Object.hasOwn(control.dataset, 'aduBusyDisabled')) {
             control.disabled = control.dataset.aduBusyDisabled === 'true';
@@ -179,7 +194,7 @@ function setBusyState(root, busy) {
     });
 }
 
-function createLengthSection(settings) {
+function createLengthSection(settings, modelSelect) {
     const section = node('section', 'adu-card');
     const heading = node('div', 'adu-card__heading', t('length'));
     const modes = node('div', 'adu-length-grid');
@@ -209,8 +224,94 @@ function createLengthSection(settings) {
         modes.appendChild(button);
     }
     customWrap.hidden = settings.lengthMode !== 'custom';
-    section.append(heading, modes, customWrap, node('p', 'adu-hint', t('approximate')));
-    return { section, buttons, customInput };
+    const tokens = createTokenControl(settings, buttons, customInput, modelSelect);
+    section.append(heading, modes, customWrap, node('p', 'adu-hint', t('approximate')), tokens.fieldset);
+    return { section, buttons, customInput, tokens };
+}
+
+function createTokenControl(settings, lengthButtons, wordInput, modelSelect) {
+    const fieldset = node('fieldset', 'adu-token-budget');
+    fieldset.appendChild(node('legend', 'adu-card__heading', t('tokenBudget')));
+    const defaultRow = node('label', 'adu-token-option');
+    const customRow = node('div', 'adu-token-custom');
+    const customLabel = node('label', 'adu-token-option');
+    const radios = ['default', 'custom'].map(mode => {
+        const radio = node('input');
+        radio.type = 'radio';
+        radio.name = 'adu_token_mode';
+        radio.id = `adu_token_${mode}`;
+        radio.value = mode;
+        radio.checked = settings.tokenMode === mode;
+        return radio;
+    });
+    const [defaultRadio, customRadio] = radios;
+    defaultRow.htmlFor = defaultRadio.id;
+    customLabel.htmlFor = customRadio.id;
+    const defaultText = node('span', '', t('tokenDefault') + ' ');
+    const allowance = node('span', 'adu-token-allowance');
+    allowance.setAttribute('aria-live', 'polite');
+    defaultText.appendChild(allowance);
+    defaultRow.append(defaultRadio, defaultText);
+    customLabel.append(customRadio, node('span', '', t('tokenCustom')));
+
+    const input = node('input', 'text_pole');
+    input.id = 'adu_custom_tokens';
+    input.type = 'text';
+    input.inputMode = 'numeric';
+    input.value = String(settings.customTokens);
+    input.setAttribute('aria-label', t('customTokens'));
+    input.setAttribute('aria-describedby', 'adu_token_hint adu_token_error');
+    customRow.append(customLabel, input);
+    const hint = node('p', 'adu-hint', t('tokenHint', TOKEN_LIMITS));
+    hint.id = 'adu_token_hint';
+    const error = node('p', 'adu-hint adu-token-error');
+    error.id = 'adu_token_error';
+    error.hidden = true;
+    error.setAttribute('role', 'alert');
+    fieldset.append(defaultRow, customRow, hint, error);
+
+    const clearError = () => {
+        input.removeAttribute('aria-invalid');
+        error.hidden = true;
+        error.textContent = '';
+    };
+    const syncMode = () => {
+        input.disabled = !customRadio.checked;
+        clearError();
+    };
+    radios.forEach(radio => radio.addEventListener('change', syncMode));
+    input.addEventListener('input', clearError);
+    syncMode();
+
+    const refresh = () => {
+        const lengthMode = pressedMode(lengthButtons, LENGTH_MODES, 'medium');
+        let text = t('tokenUnavailable');
+        if (lengthMode !== 'custom' || isValidNumber(wordInput.value, WORD_LIMITS)) {
+            try {
+                const { contextLimit } = resolveRequestContext(resolveProfileId({ profileId: modelSelect.value }));
+                const count = tokenBudget({ tokenMode: 'default', lengthMode, customWords: wordInput.value }, contextLimit);
+                text = t('tokens', { count });
+            } catch {}
+        }
+        allowance.textContent = `· ${text}`;
+    };
+    lengthButtons.forEach(button => button.addEventListener('click', refresh));
+    wordInput.addEventListener('input', refresh);
+    modelSelect.addEventListener('change', refresh);
+    refresh();
+
+    const validate = () => {
+        if (!customRadio.checked || parseCustomTokens(input.value) !== null) {
+            clearError();
+            return true;
+        }
+        input.setAttribute('aria-invalid', 'true');
+        error.textContent = t('invalidTokens', TOKEN_LIMITS);
+        error.hidden = false;
+        input.focus();
+        return false;
+    };
+    return { fieldset, customRadio, input, refresh, validate };
 }
 
 function createContextSection(settings) {
@@ -325,6 +426,8 @@ function persistDialog(settings, model, length, context, preset) {
     settings.profileId = String(model.select.value || '');
     settings.lengthMode = pressedMode(length.buttons, LENGTH_MODES, 'medium');
     settings.customWords = clampInt(length.customInput.value, WORD_LIMITS, settings.customWords);
+    settings.tokenMode = length.tokens.customRadio.checked ? 'custom' : 'default';
+    settings.customTokens = parseCustomTokens(length.tokens.input.value) ?? settings.customTokens;
     settings.historyMode = pressedMode(context.history.buttons, HISTORY_MODES, 'all');
     settings.historyCustom = clampInt(context.history.customInput.value, HISTORY_LIMITS, settings.historyCustom);
     for (const [key, input] of Object.entries(context.controls)) settings[key] = input.checked;
@@ -334,15 +437,144 @@ function persistDialog(settings, model, length, context, preset) {
     saveSettings();
 }
 
+async function openLastResult() {
+    const actions = recoveryActions;
+    if (resultClose || !actions?.get()) return;
+    const ctx = SillyTavern.getContext();
+    const root = node('div', 'adu-dialog adu-result-view');
+    const heading = node('h3', '', t('lastResult'));
+    heading.id = 'adu_result_title';
+    const content = node('div', 'adu-result-content');
+    const empty = node('p', 'adu-hint', t('lastResultEmpty'));
+    const status = node('p', 'adu-hint');
+    status.setAttribute('role', 'status');
+    const reason = node('p', 'adu-hint', t('restoreUnavailable'));
+    reason.id = 'adu_restore_reason';
+    const restore = node('button', 'menu_button adu-result-restore', t('restoreOriginal'));
+    const retry = node('button', 'menu_button adu-result-retry', t('retry'));
+    restore.type = retry.type = 'button';
+    restore.setAttribute('aria-describedby', reason.id);
+    retry.setAttribute('aria-describedby', reason.id);
+    const fields = [];
+    let shownId;
+    let disposed = false;
+    root.append(heading, node('p', 'adu-hint', t('lastResultHint')), content, empty, status);
+
+    const refresh = () => {
+        if (disposed) return;
+        const result = actions.get();
+        if (shownId !== result?.id) {
+            shownId = result?.id;
+            for (const field of fields) field.textarea.value = result?.[field.key] || '';
+            status.textContent = '';
+        }
+        content.hidden = !result;
+        empty.hidden = !!result;
+        for (const field of fields) field.copy.disabled = !result || field.copying;
+        restore.disabled = !actions.canRestore(shownId);
+        const busy = actions.isBusy();
+        retry.textContent = t(busy ? 'stop' : 'retry');
+        retry.title = t(busy ? 'quickStop' : 'retryHint');
+        retry.disabled = busy ? actions.isStopping() : !actions.canRetry(shownId);
+        reason.hidden = !restore.disabled;
+    };
+
+    for (const [key, labelKey, copyKey] of [
+        ['upgraded', 'upgradedDraft', 'copyUpgraded'], ['original', 'originalDraft', 'copyOriginal'],
+    ]) {
+        const block = node(key === 'original' ? 'details' : 'section', 'adu-result-block');
+        const label = node(key === 'original' ? 'summary' : 'label', 'adu-card__heading', t(labelKey));
+        label.id = `adu_result_${key}_label`;
+        const textarea = node('textarea', 'text_pole adu-result-text');
+        textarea.id = `adu_result_${key}`;
+        textarea.readOnly = true;
+        textarea.dir = 'auto';
+        textarea.rows = 7;
+        textarea.setAttribute('aria-labelledby', label.id);
+        if (key === 'upgraded') label.htmlFor = textarea.id;
+        const copy = node('button', 'menu_button', t(copyKey));
+        copy.type = 'button';
+        const field = { key, textarea, copy, copying: false };
+        fields.push(field);
+        copy.addEventListener('click', async () => {
+            const result = actions.get();
+            if (disposed || !result || result.id !== shownId || field.copying) return;
+            const id = result.id;
+            field.copying = true;
+            copy.disabled = true;
+            try {
+                await navigator.clipboard.writeText(result[key]);
+                if (!disposed && actions.get()?.id === id) status.textContent = t('copied');
+            } catch {
+                if (!disposed && actions.get()?.id === id) status.textContent = t('copyFailed');
+            } finally {
+                field.copying = false;
+                refresh();
+            }
+        });
+        block.append(label, textarea, copy);
+        content.appendChild(block);
+    }
+    const buttons = node('div', 'adu-actions');
+    buttons.append(restore, retry);
+    content.append(buttons, reason);
+    restore.addEventListener('click', () => {
+        if (disposed) return;
+        actions.restore(shownId);
+        refresh();
+    });
+    retry.addEventListener('click', async () => {
+        if (disposed) return;
+        if (actions.isBusy()) {
+            actions.cancel();
+            return;
+        }
+        try {
+            await actions.retry(shownId);
+        } catch {}
+    });
+    const unsubscribe = actions.subscribe(refresh);
+    const dispose = () => {
+        if (disposed) return;
+        disposed = true;
+        unsubscribe();
+        for (const field of fields) field.textarea.value = '';
+        status.textContent = '';
+    };
+    const popup = new ctx.Popup(root, ctx.POPUP_TYPE.TEXT, '', {
+        wide: true,
+        allowVerticalScrolling: true,
+        okButton: t('close'),
+        cancelButton: false,
+        onClose: dispose,
+    });
+    popup.dlg?.setAttribute('aria-labelledby', heading.id);
+    const close = () => {
+        dispose();
+        popup.complete(ctx.POPUP_RESULT.CANCELLED);
+    };
+    resultClose = close;
+    refresh();
+    try {
+        await popup.show();
+    } finally {
+        dispose();
+        if (resultClose === close) resultClose = null;
+    }
+}
+
 async function openUpgradeDialog(onUpgrade, onCancel) {
     if (dialogOpen) return;
     const ctx = SillyTavern.getContext();
-    if (!resolveProfileId(getSettings()) && ctx.mainApi !== 'openai' && !supportedProfiles().length) {
+    const recovery = recoveryActions;
+    const hasResult = !!recovery?.get();
+    if (!hasResult && !resolveProfileId(getSettings()) && ctx.mainApi !== 'openai' && !supportedProfiles().length) {
         toastr.warning(t('noApi'), t('title'));
         return;
     }
     const textarea = document.getElementById('send_textarea');
     if (!textarea?.value?.trim()) {
+        if (hasResult) return openLastResult();
         toastr.info(t('emptyDraft'), t('title'));
         textarea?.focus();
         return;
@@ -357,9 +589,20 @@ async function openUpgradeDialog(onUpgrade, onCancel) {
     titleText.id = 'adu_dialog_title';
     title.append(glyph, titleText, glyph.cloneNode(true));
     root.append(title, node('p', 'adu-intro', t('intro')));
+    const lastResult = node('button', 'menu_button adu-last-result', t('lastResult'));
+    lastResult.type = 'button';
+    let disposed = false;
+    const refreshResult = () => {
+        if (disposed) return;
+        lastResult.hidden = !recovery?.get();
+        setBusyState(root, !!recovery?.isBusy(), !!recovery?.isStopping());
+    };
+    lastResult.addEventListener('click', openLastResult);
+    refreshResult();
+    root.appendChild(lastResult);
 
     const model = createModelSection(settings);
-    const length = createLengthSection(settings);
+    const length = createLengthSection(settings, model.select);
     const context = createContextSection(settings);
     const preset = createPresetSection(settings);
     root.append(model.section, length.section, context.section, preset.section);
@@ -399,10 +642,10 @@ async function openUpgradeDialog(onUpgrade, onCancel) {
     popup.dlg?.setAttribute('aria-labelledby', titleText.id);
 
     stop.addEventListener('click', () => {
-        stop.disabled = true;
-        onCancel();
+        if (!disposed) onCancel();
     });
     upgrade.addEventListener('click', async () => {
+        if (disposed || recovery?.isBusy()) return;
         if (!model.select.value && SillyTavern.getContext().mainApi !== 'openai') {
             toastr.warning(t('noApi'), t('title'));
             model.select.focus();
@@ -414,6 +657,7 @@ async function openUpgradeDialog(onUpgrade, onCancel) {
             length.customInput.focus();
             return;
         }
+        if (!length.tokens.validate()) return;
         const depthMode = pressedMode(context.history.buttons, HISTORY_MODES, 'all');
         if (context.controls.history.checked && depthMode === 'custom'
             && !isValidNumber(context.history.customInput.value, HISTORY_LIMITS)) {
@@ -423,21 +667,39 @@ async function openUpgradeDialog(onUpgrade, onCancel) {
         }
         settings.instruction = normalizeInstruction(instruction.value);
         persistDialog(settings, model, length, context, preset);
-        setBusyState(root, true);
-        stop.disabled = false;
-        let completed = false;
         try {
-            completed = await onUpgrade(settings);
-        } catch {}
-        setBusyState(root, false);
-        if (completed) popup.complete(ctx.POPUP_RESULT.AFFIRMATIVE);
+            const completed = await onUpgrade(settings);
+            if (completed && !disposed) popup.complete(ctx.POPUP_RESULT.AFFIRMATIVE);
+        } catch {} finally {
+            refreshResult();
+        }
     });
 
+    const events = ctx.eventTypes || ctx.event_types || {};
+    const budgetEvents = [events.SETTINGS_UPDATED, events.PRESET_CHANGED, events.CONNECTION_PROFILE_UPDATED].filter(Boolean);
+    for (const event of budgetEvents) ctx.eventSource?.on(event, length.tokens.refresh);
+    const unsubscribeResult = recovery?.subscribe(refreshResult);
+    const cleanup = (close = false) => {
+        if (disposed) return;
+        disposed = true;
+        for (const event of budgetEvents) ctx.eventSource?.removeListener(event, length.tokens.refresh);
+        unsubscribeResult?.();
+        if (close) {
+            setBusyState(root, false);
+            popup.complete(ctx.POPUP_RESULT.CANCELLED);
+        }
+    };
+    dialogCleanup = cleanup;
+    refreshResult();
     dialogOpen = true;
     try {
         await popup.show();
     } finally {
-        dialogOpen = false;
+        cleanup();
+        if (dialogCleanup === cleanup) {
+            dialogCleanup = null;
+            dialogOpen = false;
+        }
     }
 }
 
@@ -503,11 +765,14 @@ function setWordCounterSize() {
     applyCountSize(getSettings());
 }
 
-function setQuickBusy(button, busy) {
-    quickBusy = busy;
+function setQuickBusy(button) {
+    const busy = !!recoveryActions?.isBusy();
+    const stopping = !!recoveryActions?.isStopping();
     button.classList.toggle('adu-quick--busy', busy);
-    button.title = busy ? t('quickStop') : t('quickTitle');
+    button.disabled = stopping;
+    button.title = t(stopping ? 'stopping' : busy ? 'quickStop' : 'quickTitle');
     button.setAttribute('aria-label', button.title);
+    button.querySelector('.adu-quick__label').textContent = busy ? t('stop') : 'UP';
 }
 
 function addQuickButton(onUpgrade, onCancel) {
@@ -524,21 +789,16 @@ function addQuickButton(onUpgrade, onCancel) {
     count.setAttribute('aria-hidden', 'true');
     count.hidden = true;
     button.appendChild(count);
-    setQuickBusy(button, false);
+    setQuickBusy(button);
     button.classList.toggle('adu-quick--hidden', !getSettings().quickButton);
     button.addEventListener('click', async () => {
-        if (quickBusy) {
+        if (recoveryActions?.isBusy()) {
             onCancel();
             return;
         }
-        setQuickBusy(button, true);
         try {
             await onUpgrade(getSettings());
-        } catch {
-            setQuickBusy(button, false);
-            return;
-        }
-        setQuickBusy(button, false);
+        } catch {}
     });
     sendControls.insertBefore(button, sendButton);
     countTarget = count;
@@ -561,25 +821,52 @@ function setWordCounterVisible(visible) {
     refreshCount();
 }
 
-export function mountUi(onUpgrade, onCancel) {
+function stopMenuObserver() {
+    menuObserver?.disconnect();
+    menuObserver = null;
+    window.clearTimeout(menuTimer);
+    menuTimer = 0;
+}
+
+export function mountUi(onUpgrade, onCancel, recovery = recoveryActions) {
+    recoveryActions = recovery;
+    recoveryActions?.mount();
+    if (!composerCleanup && recoveryActions) composerCleanup = mountComposerActions(recoveryActions);
+    if (!quickCleanup) quickCleanup = recoveryActions?.subscribe(() => {
+        const button = document.getElementById(QUICK_ID);
+        if (button) setQuickBusy(button);
+    });
     bindGlobalHotkey();
     const mountAll = () => {
         const wandReady = addWandButton(onUpgrade, onCancel);
         const quickReady = addQuickButton(onUpgrade, onCancel);
         return wandReady && quickReady;
     };
-    if (mountAll()) return;
+    if (mountAll()) {
+        stopMenuObserver();
+        return;
+    }
+    if (menuObserver) return;
     menuObserver = new MutationObserver(() => {
-        if (!mountAll()) return;
-        menuObserver?.disconnect();
-        menuObserver = null;
+        if (mountAll()) stopMenuObserver();
     });
     menuObserver.observe(document.body, { childList: true, subtree: true });
+    menuTimer = window.setTimeout(stopMenuObserver, 15000);
 }
 
 export function unmountUi() {
-    menuObserver?.disconnect();
-    menuObserver = null;
+    composerCleanup?.();
+    composerCleanup = null;
+    quickCleanup?.();
+    quickCleanup = null;
+    recoveryActions?.cleanup();
+    recoveryActions = null;
+    resultClose?.();
+    resultClose = null;
+    dialogCleanup?.(true);
+    dialogCleanup = null;
+    dialogOpen = false;
+    stopMenuObserver();
     if (hotkeyHandler) document.removeEventListener('keydown', hotkeyHandler, true);
     hotkeyHandler = null;
     settingsAbort?.abort();

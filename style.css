@@ -112,6 +112,84 @@
     display: none !important;
 }
 
+#adu_composer_actions {
+    position: fixed;
+    inset: 0 auto auto 0;
+    width: 0;
+    height: 0;
+    z-index: 9991;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+#adu_composer_actions .adu-composer-actions {
+    position: absolute;
+    display: flex;
+    gap: 2px !important;
+    width: max-content;
+    max-width: calc(100vw - 16px);
+    padding: 2px !important;
+    border: 1px solid var(--adu-border);
+    border-radius: 8px !important;
+    background: var(--adu-surface-strong);
+    box-shadow: 0 3px 10px #0003;
+    color: var(--adu-text);
+    font: 12px/1.3 var(--mainFontFamily, sans-serif) !important;
+}
+
+#adu_composer_actions .adu-composer-actions,
+#adu_composer_actions .adu-composer-actions * {
+    box-sizing: border-box !important;
+}
+
+#adu_composer_actions .adu-composer-actions > button {
+    flex: 0 1 auto !important;
+    width: auto !important;
+    height: auto !important;
+    min-width: 44px !important;
+    min-height: 28px !important;
+    max-width: none !important;
+    max-height: none !important;
+    aspect-ratio: auto !important;
+    margin: 0 !important;
+    padding: 3px 8px !important;
+    border: 1px solid transparent;
+    border-radius: 5px !important;
+    background: transparent;
+    color: inherit;
+    font: inherit !important;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+    pointer-events: auto;
+    touch-action: manipulation;
+}
+
+#adu_composer_actions .adu-composer-actions > button:hover,
+#adu_composer_actions .adu-composer-actions > button:focus-visible {
+    border-color: var(--adu-accent);
+    background: var(--adu-accent-soft);
+}
+
+#adu_composer_actions .adu-composer-actions > button:focus-visible {
+    outline: 2px solid var(--adu-accent);
+    outline-offset: 1px;
+}
+
+#adu_composer_actions .adu-composer-actions > button[aria-disabled="true"] {
+    color: var(--adu-muted);
+    cursor: help;
+}
+
+.adu-composer-reason {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
 .adu-dialog {
     display: flex;
     flex-direction: column;
@@ -238,6 +316,143 @@
 
 .adu-custom-length[hidden] {
     display: none;
+}
+
+.adu-token-budget {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+    margin: 4px 0 0;
+    padding: 0;
+    border: 0;
+}
+
+.adu-token-budget legend {
+    margin-bottom: 4px;
+    padding: 0;
+}
+
+.adu-token-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    min-height: 44px;
+    font-size: 0.82em;
+    cursor: pointer;
+}
+
+.adu-token-option input {
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    accent-color: var(--adu-accent);
+}
+
+.adu-token-allowance {
+    color: var(--adu-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.adu-token-custom {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(90px, 140px);
+    align-items: center;
+    gap: 10px;
+}
+
+.adu-token-custom > .text_pole {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    margin: 0;
+    font-size: 0.84em;
+}
+
+.adu-token-budget input:focus-visible {
+    outline: 2px solid var(--adu-accent);
+    outline-offset: 3px;
+}
+
+.adu-token-custom > input:disabled {
+    opacity: 0.55;
+}
+
+.adu-token-error {
+    color: var(--adu-text);
+}
+
+.adu-last-result,
+.adu-result-view .menu_button {
+    min-width: 0;
+    min-height: 44px;
+    margin: 0;
+    padding: 8px 12px;
+    overflow-wrap: anywhere;
+}
+
+.adu-last-result {
+    align-self: flex-start;
+}
+
+.adu-last-result[hidden],
+.adu-result-content[hidden] {
+    display: none;
+}
+
+.adu-result-view,
+.adu-result-content,
+.adu-result-block {
+    min-width: 0;
+}
+
+.adu-result-view h3 {
+    margin: 0;
+}
+
+.adu-result-content {
+    display: grid;
+    gap: 12px;
+}
+
+.adu-result-block > .adu-card__heading {
+    display: block;
+    padding-block: 8px;
+}
+
+.adu-result-block summary.adu-card__heading {
+    display: list-item;
+    min-height: 44px;
+    padding-block: 13px;
+    cursor: pointer;
+}
+
+.adu-result-view .adu-result-text {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    height: min(30vh, 240px);
+    height: min(30dvh, 240px);
+    min-height: 100px;
+    margin: 0 0 8px;
+    padding: 10px;
+    font-size: 16px;
+    line-height: 1.5;
+    white-space: pre-wrap !important;
+    overflow-wrap: anywhere;
+    resize: vertical;
+}
+
+.adu-last-result:focus-visible,
+.adu-result-view :is(button, summary, textarea):focus-visible {
+    outline: 2px solid var(--adu-accent);
+    outline-offset: 2px;
+}
+
+.adu-result-view button:disabled {
+    opacity: 0.55;
+    cursor: default;
 }
 
 .adu-context-grid {
@@ -690,9 +905,23 @@
     .adu-prompt-list { max-height: 27vh; }
     .adu-actions { align-items: stretch; flex-direction: column; }
     .adu-actions .menu_button { width: 100%; min-width: 0; }
+    .adu-result-view .menu_button { width: 100%; }
+    .adu-result-view .adu-result-text { resize: none; }
+    .adu-dialog :is(input.text_pole, textarea.text_pole, select.text_pole) { font-size: 16px; }
 }
 
 @media (pointer: coarse) {
+    #adu_composer_actions .adu-composer-actions {
+        font-size: 13px !important;
+    }
+
+    #adu_composer_actions .adu-composer-actions > button {
+        min-height: 30px !important;
+    }
+
+    .adu-dialog :is(input.text_pole, textarea.text_pole, select.text_pole) { font-size: 16px; }
+    .adu-dialog :is(input.text_pole, select.text_pole, .menu_button, .adu-preset-summary) { min-height: 44px; }
+
     #rightSendForm:has(> button.adu-quick:not(.adu-quick--hidden)) {
         width: 44px;
         min-width: 44px;

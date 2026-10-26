@@ -4,16 +4,25 @@ export const LENGTH_MODES = Object.freeze([...Object.keys(LENGTH_WORDS), 'custom
 export const HISTORY_COUNTS = Object.freeze({ last5: 5, last15: 15, last30: 30 });
 export const HISTORY_MODES = Object.freeze(['all', ...Object.keys(HISTORY_COUNTS), 'custom']);
 export const WORD_LIMITS = Object.freeze({ min: 1, max: 5000 });
+export const TOKEN_MODES = Object.freeze(['default', 'custom']);
+export const TOKEN_LIMITS = Object.freeze({ min: 1, max: 128000 });
 const COUNTER_SIZES = Object.freeze({ small: 7, medium: 8, large: 10 });
 export const COUNTER_SIZE_MODES = Object.freeze(Object.keys(COUNTER_SIZES));
 export const HISTORY_LIMITS = Object.freeze({ min: 1, max: 500 });
 export const INSTRUCTION_MAX = 10000;
 const PROFILE_ID_MAX = 200;
-const DEFAULT_INSTRUCTION = 'Rewrite and improve the draft below. Preserve its intent, point of view, factual details, and roleplay continuity. Make the prose natural and polished. Return only the upgraded draft, with no commentary or quotation marks.';
+const LEGACY_DEFAULT_INSTRUCTION = 'Rewrite and improve the draft below. Preserve its intent, point of view, factual details, and roleplay continuity. Make the prose natural and polished. Return only the upgraded draft, with no commentary or quotation marks.';
+const DEFAULT_INSTRUCTION = `Rewrite and improve the {{user}} draft below while preserving its exact intent and roleplay continuity. Match the scene's point of view and tense and ground the prose in what {{user}} directly senses and does so physical tells carry the feeling on their own. Can use slang, drawl or whatever heart desires for the moment, if it's expressive.
+
+Let the tone and typographic stress in both the unspoken prose and spoken dialogue follow the actual temperature of the draft, staying effortless on a calm beat and leaning into sharper emphasis or vocal strain only where the emotion genuinely pushes it.
+
+Keep {{user}}'s voice human and unrehearsed, adding to the draft's more raw phrasing, when the moment tangles their head or tongue.`;
 
 const DEFAULTS = Object.freeze({
     lengthMode: 'medium',
     customWords: 300,
+    tokenMode: 'default',
+    customTokens: 8192,
     historyMode: 'all',
     historyCustom: 20,
     persona: true,
@@ -65,6 +74,15 @@ export function clampInt(value, { min, max }, fallback) {
     return Math.min(max, Math.max(min, Math.trunc(number)));
 }
 
+export function parseCustomTokens(value) {
+    if (typeof value === 'string') {
+        if (!/^\d+$/.test(value.trim())) return null;
+        value = Number(value.trim());
+    }
+    return Number.isSafeInteger(value) && value >= TOKEN_LIMITS.min && value <= TOKEN_LIMITS.max
+        ? value : null;
+}
+
 function normalizeProfileId(value) {
     if (typeof value !== 'string') return '';
     return stripControlCharacters(value).trim().slice(0, PROFILE_ID_MAX);
@@ -87,9 +105,12 @@ export function getSettings() {
     const current = ctx.extensionSettings[MODULE_NAME];
     if (cached && current === cached) return cached;
     const raw = plainObject(current);
+    const migrateInstruction = raw.instruction === LEGACY_DEFAULT_INSTRUCTION;
     cached = {
         lengthMode: LENGTH_MODES.includes(raw.lengthMode) ? raw.lengthMode : DEFAULTS.lengthMode,
         customWords: clampInt(raw.customWords, WORD_LIMITS, DEFAULTS.customWords),
+        tokenMode: TOKEN_MODES.includes(raw.tokenMode) ? raw.tokenMode : DEFAULTS.tokenMode,
+        customTokens: parseCustomTokens(raw.customTokens) ?? DEFAULTS.customTokens,
         historyMode: HISTORY_MODES.includes(raw.historyMode) ? raw.historyMode : DEFAULTS.historyMode,
         historyCustom: clampInt(raw.historyCustom, HISTORY_LIMITS, DEFAULTS.historyCustom),
         persona: typeof raw.persona === 'boolean' ? raw.persona : DEFAULTS.persona,
@@ -101,10 +122,11 @@ export function getSettings() {
         counterSize: COUNTER_SIZE_MODES.includes(raw.counterSize) ? raw.counterSize : DEFAULTS.counterSize,
         hotkey: normalizeHotkey(raw.hotkey),
         profileId: normalizeProfileId(raw.profileId),
-        instruction: normalizeInstruction(raw.instruction),
+        instruction: normalizeInstruction(migrateInstruction ? DEFAULT_INSTRUCTION : raw.instruction),
         promptSelections: sanitizeSelections(raw.promptSelections),
     };
     ctx.extensionSettings[MODULE_NAME] = cached;
+    if (migrateInstruction) saveSettings();
     return cached;
 }
 
@@ -124,6 +146,12 @@ export function targetWords(settings) {
     return settings.lengthMode === 'custom'
         ? clampInt(settings.customWords, WORD_LIMITS, DEFAULTS.customWords)
         : LENGTH_WORDS[settings.lengthMode] || LENGTH_WORDS.medium;
+}
+
+export function tokenBudget(settings, contextLimit) {
+    if (settings.tokenMode === 'custom') return parseCustomTokens(settings.customTokens);
+    const requested = Math.max(128, Math.ceil(targetWords(settings) * 1.8) + 64);
+    return Math.min(16384, Math.max(128, Math.min(Math.floor(contextLimit / 2), requested)));
 }
 
 export function historyLimit(settings) {

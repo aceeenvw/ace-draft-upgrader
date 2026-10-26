@@ -3,6 +3,7 @@ import { playMessageSound } from '/scripts/power-user.js';
 import { t } from './i18n.js';
 import { buildUpgradeRequest } from './prompt.js';
 import { resolveProfileId } from './settings.js';
+import { profileRequestOverrides, RequestBudgetError, resolveRequestContext } from './request.js';
 import { bindSettingsUi, mountUi, unmountUi } from './ui.js';
 
 const EXT_PATH = new URL('.', import.meta.url).pathname.replace(/\/$/, '');
@@ -15,6 +16,13 @@ const IS_DESKTOP_OS = !IS_IOS && !/Android|webOS|BlackBerry|Opera Mini|IEMobile/
 let inFlight = false;
 let activeAbort = null;
 let activeMainGeneration = false;
+let activeRun = null;
+let lastResult = null;
+let resultSequence = 0;
+let composerWrite = false;
+let lifecycleCleanup = null;
+let settingsController = null;
+const resultListeners = new Set();
 
 const warn = (scope, error) => console.warn(`[${TAG}] ${scope}`, error);
 
@@ -23,9 +31,52 @@ function playCompletionSound() {
 }
 
 function setComposerValue(textarea, value) {
-    textarea.value = value;
-    textarea.dispatchEvent(new Event('input', { bubbles: true }));
-    textarea.selectionStart = textarea.selectionEnd = value.length;
+    composerWrite = true;
+    try {
+        textarea.value = value;
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+        textarea.selectionStart = textarea.selectionEnd = value.length;
+    } finally {
+        composerWrite = false;
+    }
+}
+
+function chatKey() {
+    const ctx = SillyTavern.getContext();
+    return JSON.stringify([ctx.groupId || null, ctx.groupId ? null : ctx.characterId ?? null,
+        ctx.getCurrentChatId?.() ?? ctx.chatId ?? null]);
+}
+
+function getLastResult() {
+    return lastResult?.chatKey === chatKey() ? lastResult : null;
+}
+
+function notifyResult() {
+    for (const listener of resultListeners) listener();
+}
+
+function canRestoreResult(id) {
+    const result = getLastResult();
+    const textarea = document.getElementById('send_textarea');
+    return !!result && result.id === id && result.applied && !result.edited && !inFlight && !is_send_press
+        && textarea === result.textarea && textarea?.value === result.upgraded;
+}
+
+function restoreResult(id) {
+    if (!canRestoreResult(id)) return false;
+    const result = lastResult;
+    result.applied = false;
+    result.restored = true;
+    setComposerValue(result.textarea, result.original);
+    if (IS_DESKTOP_OS) result.textarea.focus({ preventScroll: true });
+    notifyResult();
+    toastr.info(t('restored'), t('title'));
+    return true;
+}
+
+async function retryDraft(id) {
+    if (!canRestoreResult(id)) return false;
+    return upgradeDraft(lastResult.settings, lastResult);
 }
 
 function isCancellation(error) {
@@ -37,20 +88,73 @@ function isCancellation(error) {
 }
 
 function cancelUpgrade() {
-    if (!inFlight) return false;
+    if (!inFlight || activeAbort?.signal.aborted) return false;
     activeAbort?.abort(new DOMException('Cancelled by user', 'AbortError'));
-    if (activeMainGeneration) SillyTavern.getContext().stopGeneration?.();
+    notifyResult();
+    if (activeMainGeneration && !is_send_press) SillyTavern.getContext().stopGeneration?.();
     return true;
 }
 
-function showUndo(original, upgraded) {
-    const restore = () => {
-        const textarea = document.getElementById('send_textarea');
-        if (!textarea || textarea.value !== upgraded) return;
-        setComposerValue(textarea, original);
-        textarea.focus();
-        toastr.info(t('restored'), t('title'));
+function clearResult() {
+    lastResult = null;
+    activeRun = null;
+    cancelUpgrade();
+    notifyResult();
+}
+
+function mountRecovery() {
+    if (lifecycleCleanup) return;
+    const ctx = SillyTavern.getContext();
+    const events = ctx.eventTypes || ctx.event_types || {};
+    const resetEvents = [events.CHAT_CHANGED, events.MESSAGE_SENT].filter(Boolean);
+    for (const event of resetEvents) ctx.eventSource?.on(event, clearResult);
+    const onInput = event => {
+        if (composerWrite || event.target?.id !== 'send_textarea' || (!activeRun && !lastResult)) return;
+        if (!event.target.value.trim() && !event.isComposing) {
+            clearResult();
+            return;
+        }
+        let changed = false;
+        for (const result of [activeRun, lastResult]) {
+            if (!result || result.edited) continue;
+            result.edited = true;
+            changed = true;
+        }
+        if (changed) notifyResult();
     };
+    document.addEventListener('input', onInput, true);
+    lifecycleCleanup = () => {
+        for (const event of resetEvents) ctx.eventSource?.removeListener(event, clearResult);
+        document.removeEventListener('input', onInput, true);
+        clearResult();
+        resultListeners.clear();
+        lifecycleCleanup = null;
+    };
+}
+
+const recovery = {
+    mount: mountRecovery,
+    get: getLastResult,
+    canRestore: canRestoreResult,
+    restore: restoreResult,
+    canRetry: canRestoreResult,
+    retry: retryDraft,
+    cancel: cancelUpgrade,
+    isBusy: () => inFlight,
+    isStopping: () => inFlight && !!activeAbort?.signal.aborted,
+    subscribe(listener) {
+        resultListeners.add(listener);
+        return () => resultListeners.delete(listener);
+    },
+    cleanup() {
+        settingsController?.abort();
+        settingsController = null;
+        lifecycleCleanup?.();
+    },
+};
+
+function showUndo(id) {
+    const restore = () => restoreResult(id);
     const toast = toastr.success(t('replaced'), t('undo'), {
         timeOut: 9000,
         extendedTimeOut: 3000,
@@ -69,6 +173,7 @@ async function generateViaMainApi(ctx, request, signal) {
     try {
         const result = await ctx.generateRaw({
             prompt: request.prompt,
+            api: 'openai',
             responseLength: request.responseLength,
             trimNames: false,
         });
@@ -79,58 +184,90 @@ async function generateViaMainApi(ctx, request, signal) {
     }
 }
 
-async function generateViaProfile(ctx, profileId, request, signal) {
+async function generateViaProfile(ctx, route, request, signal) {
     const service = ctx.ConnectionManagerRequestService;
     if (!service) throw new Error('Connection Manager is not available');
-    const result = await service.sendRequest(profileId, request.prompt, request.responseLength, {
+    const overrides = await profileRequestOverrides(route, request);
+    signal.throwIfAborted();
+    const result = await service.sendRequest(route.profile.id, request.prompt, request.responseLength, {
         stream: false,
         extractData: true,
-        includePreset: true,
+        includePreset: route.api.selected !== 'openai',
         signal,
-    });
+    }, overrides);
     signal.throwIfAborted();
     return String(result?.content || '');
 }
 
-async function upgradeDraft(settings) {
+async function upgradeDraft(settings, previous = null) {
     if (inFlight || is_send_press) {
         toastr.warning(t('busy'), t('title'));
         return false;
     }
     const ctx = SillyTavern.getContext();
     const profileId = resolveProfileId(settings);
+    if (previous && settings.profileId && profileId !== settings.profileId) {
+        toastr.warning(t('retryProfileMissing'), t('title'));
+        return false;
+    }
     if (!profileId && ctx.mainApi !== 'openai') {
         toastr.warning(t('noApi'), t('title'));
         return false;
     }
     const textarea = document.getElementById('send_textarea');
-    const original = String(textarea?.value || '');
-    if (!textarea || !original.trim()) {
+    const composerValue = String(textarea?.value || '');
+    if (!textarea || !composerValue.trim()) {
         toastr.info(t('emptyDraft'), t('title'));
         return false;
     }
 
+    const run = {
+        id: ++resultSequence,
+        chatKey: chatKey(),
+        textarea,
+        original: previous?.original ?? composerValue,
+        settings: structuredClone(settings),
+        upgraded: '',
+        applied: false,
+        edited: false,
+    };
+    run.settings.profileId = profileId;
     inFlight = true;
     activeAbort = new AbortController();
+    const signal = activeAbort.signal;
+    activeRun = run;
+    notifyResult();
     try {
-        const request = await buildUpgradeRequest(original, settings, activeAbort.signal);
-        activeAbort.signal.throwIfAborted();
+        const route = resolveRequestContext(profileId);
+        const request = await buildUpgradeRequest(run.original, run.settings, signal, route);
+        signal.throwIfAborted();
+        if (activeRun !== run || run.chatKey !== chatKey()) return false;
         const upgraded = (profileId
-            ? await generateViaProfile(ctx, profileId, request, activeAbort.signal)
-            : await generateViaMainApi(ctx, request, activeAbort.signal)).trim();
+            ? await generateViaProfile(ctx, route, request, signal)
+            : await generateViaMainApi(ctx, request, signal)).trim();
+        if (activeRun !== run || run.chatKey !== chatKey()) return false;
         if (!upgraded) throw new Error('Empty generation result');
+        run.upgraded = upgraded;
+        lastResult = run;
         const currentTextarea = document.getElementById('send_textarea');
-        if (currentTextarea !== textarea || currentTextarea.value !== original) {
+        if (run.edited || currentTextarea !== textarea || currentTextarea.value !== composerValue) {
+            run.edited = true;
             toastr.warning(t('draftChanged'), t('title'));
             return false;
         }
         setComposerValue(currentTextarea, upgraded);
+        run.applied = currentTextarea.value === upgraded;
         playCompletionSound();
-        window.setTimeout(() => currentTextarea.focus(), 0);
-        showUndo(original, upgraded);
+        if (IS_DESKTOP_OS) currentTextarea.focus({ preventScroll: true });
+        showUndo(run.id);
         return true;
     } catch (error) {
-        if (isCancellation(error)) {
+        if (activeRun !== run || run.chatKey !== chatKey()) return false;
+        if (error instanceof RequestBudgetError) {
+            toastr.warning(error.message, t('title'));
+            return false;
+        }
+        if (signal.aborted || isCancellation(error)) {
             toastr.info(t('stopped'), t('title'));
             return false;
         }
@@ -138,8 +275,10 @@ async function upgradeDraft(settings) {
         toastr.error(t('failed'), t('title'));
         throw error;
     } finally {
+        if (activeRun === run) activeRun = null;
         inFlight = false;
         activeAbort = null;
+        notifyResult();
     }
 }
 
@@ -150,22 +289,30 @@ function placeAfterAnchor(host, block) {
     return true;
 }
 
-function watchForAnchor(host, block) {
+function watchForAnchor(host, block, signal) {
     let timer = 0;
-    const observer = new MutationObserver(() => {
-        if (!placeAfterAnchor(host, block)) return;
+    const stop = () => {
         observer.disconnect();
         window.clearTimeout(timer);
+        signal.removeEventListener('abort', stop);
+    };
+    const observer = new MutationObserver(() => {
+        if (placeAfterAnchor(host, block)) stop();
     });
     observer.observe(host, { childList: true });
-    timer = window.setTimeout(() => observer.disconnect(), ANCHOR_TIMEOUT_MS);
+    signal.addEventListener('abort', stop, { once: true });
+    timer = window.setTimeout(stop, ANCHOR_TIMEOUT_MS);
 }
 
 async function mountSettings() {
     if (document.querySelector('.ace-draft-upgrader-settings')) return;
-    const response = await fetch(`${EXT_PATH}/settings.html`);
+    settingsController?.abort();
+    settingsController = new AbortController();
+    const { signal } = settingsController;
+    const response = await fetch(`${EXT_PATH}/settings.html`, { signal });
     if (!response.ok) throw new Error(`Settings template returned ${response.status}`);
     const html = await response.text();
+    signal.throwIfAborted();
     const host = document.getElementById('extensions_settings') || document.getElementById('extensions_settings2');
     if (!host) throw new Error('Extensions settings container is unavailable');
     const template = document.createElement('template');
@@ -174,16 +321,15 @@ async function mountSettings() {
     if (!block) throw new Error('Settings template is empty');
     host.appendChild(block);
     bindSettingsUi();
-    if (!placeAfterAnchor(host, block)) watchForAnchor(host, block);
+    if (!placeAfterAnchor(host, block)) watchForAnchor(host, block, signal);
 }
 
 jQuery(async () => {
-    mountUi(upgradeDraft, cancelUpgrade);
+    mountUi(upgradeDraft, cancelUpgrade, recovery);
+    window.addEventListener('pagehide', unmountUi, { once: true });
     try {
         await mountSettings();
     } catch (error) {
-        warn('settings', error);
+        if (!isCancellation(error)) warn('settings', error);
     }
-
-    window.addEventListener('pagehide', unmountUi, { once: true });
 });
